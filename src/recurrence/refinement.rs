@@ -201,19 +201,17 @@ pub fn discover_interlacing_refinements(
     run_search(request)
 }
 
-/// Replay every candidate, identity, fit, pencil and search limit exactly.
+/// Check every stored transition, Ore identity, seed, degree and preservation
+/// pencil without coordinate synthesis or fitting. Unsuccessful candidates
+/// without a transition still regenerate their failed bounded fit. Candidate
+/// enumeration order/completeness is discovery metadata, not a proof obligation.
 ///
 /// # Errors
-/// A stale or modified report or an invalid embedded request.
+/// Invalid mathematical evidence, inconsistent verdict metadata, or an invalid request.
 pub fn verify_interlacing_refinements(
     report: &InterlacingRefinementReport,
 ) -> Result<(), RecurrenceError> {
-    if discover_interlacing_refinements(&report.request)? != *report {
-        return Err(RecurrenceError::VerificationFailed(
-            "interlacing refinement report differs on exact replay".into(),
-        ));
-    }
-    Ok(())
+    search::verify(report)
 }
 
 #[cfg(test)]

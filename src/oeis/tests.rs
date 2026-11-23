@@ -362,6 +362,7 @@ fn real_rootedness_flags_parse_validate_and_round_trip() {
     refuted.real_rootedness = Some(OeisCatalogRealRootedness {
         status: OeisRealRootednessStatus::KnownNotRealRooted,
         as_of: None,
+        audit: None,
     });
     let refuted_line = refuted.to_jsonl_line();
     assert!(refuted_line.ends_with("\"real_rootedness\":{\"status\":\"known_not_real_rooted\"}}"));
@@ -1070,5 +1071,89 @@ fn stretch_additions_preserve_source_rows_and_supplied_provenance() {
         "A326600", "A383149", "A383206", "A384968",
     ] {
         assert!(by_id(id).is_none(), "{id} must remain outside the catalog");
+    }
+}
+
+#[test]
+#[cfg_attr(
+    not(feature = "full-tests"),
+    ignore = "full test tier: catalog provenance replay"
+)]
+fn recorded_term_digests_and_validation_rows_recompute_from_catalog_generators() {
+    let records = OeisCatalogRecord::parse_jsonl(&catalog_data_text()).unwrap();
+    let mut digests = 0;
+    let mut validations = 0;
+    for record in records {
+        let entry = by_id(&record.id).unwrap();
+        let count = record.provenance.source_rows.saturating_add(1).max(
+            record
+                .provenance
+                .validation_row
+                .as_ref()
+                .map_or(0, |row| row.index + 1),
+        );
+        if record.provenance.checked_terms.is_none() && record.provenance.validation_row.is_none() {
+            continue;
+        }
+        let rows = entry
+            .generate_rows(count)
+            .unwrap_or_else(|error| panic!("{}: {error}", record.id));
+        if let Some(validation) = &record.provenance.validation_row {
+            let expected: Vec<BigInt> = validation
+                .terms
+                .iter()
+                .map(|c| c.parse().unwrap())
+                .collect();
+            assert_eq!(
+                rows[validation.index], expected,
+                "{} validation row",
+                record.id
+            );
+            validations += 1;
+        }
+        if let Some(checked) = record.provenance.checked_terms {
+            let terms: Vec<_> = rows
+                .iter()
+                .flatten()
+                .take(checked)
+                .map(ToString::to_string)
+                .collect();
+            assert_eq!(terms.len(), checked, "{} term count", record.id);
+            assert_eq!(
+                crate::digest::sha256_hex(terms.join(",").as_bytes()),
+                record.provenance.rows_sha256,
+                "{} rows_sha256",
+                record.id
+            );
+            digests += 1;
+        }
+    }
+    assert!(digests >= 11 && validations >= 11);
+}
+
+#[test]
+fn eleven_additions_record_external_build_and_standard_axiom_audit() {
+    let records = OeisCatalogRecord::parse_jsonl(&catalog_data_text()).unwrap();
+    for id in [
+        "A056940", "A140982", "A142470", "A155497", "A155516", "A155537", "A202750", "A278880",
+        "A370232", "A266178", "A266298",
+    ] {
+        let flag = records
+            .iter()
+            .find(|r| r.id == id)
+            .unwrap()
+            .real_rootedness
+            .as_ref()
+            .unwrap();
+        assert_eq!(flag.status, OeisRealRootednessStatus::LeanProved);
+        let audit = flag.audit.as_deref().unwrap();
+        assert!(
+            audit.contains("external formalization corpus, audited 2026-11-23, standard axioms")
+        );
+        assert!(audit.contains("downstream build and axiom audit passed"));
+        assert_eq!(
+            by_id(id).unwrap().real_rootedness().unwrap().audit,
+            Some(audit)
+        );
     }
 }

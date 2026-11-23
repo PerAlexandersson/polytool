@@ -411,95 +411,23 @@ fn certify_with_pair(
     }
     let (p, a, b, cofactor, which) = select_pair(d, supplied, ray)?;
     let mut out = empty_certificate(d, &p, &domain, degree);
-    if matches!(which, Branch::LargestPositive) {
-        let branch_discriminant = discriminant(&p);
-        if (!ray
-            && (branch_discriminant.is_zero()
-                || !domain.critical_roots(&branch_discriminant)?.is_empty()))
-            || !domain
-                .critical_roots(&P::new(p.rows()[0].clone()))?
-                .is_empty()
-        {
-            return Err(failure(
-                "higher-order pair-product branches collide or cross zero in the interval",
-            ));
-        }
-        let sign = if branch_discriminant.evaluate(&domain.sample).is_positive() {
-            1
-        } else {
-            -1
-        };
-        if !ray {
-            out.signs.push(check_univariate(
-                "pair-product branch separation",
-                &branch_discriminant,
-                &domain,
-                sign,
-            )?);
-        } else {
-            out.phase.push("the simple characteristic roots have a fixed real/nonreal pattern; the largest positive pair product is the maximum of continuous conjugate-pair norms and positive real-root products; any other positive mixed product is bounded by the larger conjugate-pair norm. Thus this maximum is continuous even when off-branch products collide".into());
-        }
-        let constant = P::new(p.rows()[0].clone());
-        let sign = if constant.evaluate(&domain.sample).is_positive() {
-            1
-        } else {
-            -1
-        };
-        out.signs.push(check_univariate(
-            "pair-product branches avoid zero",
-            &constant,
-            &domain,
-            sign,
-        )?);
-        // This is exactly the path whose R::combine reduces modulo the
-        // relation without a gcd. Polynomial suppliers have unit denominators;
-        // legacy quartic fractions retain their earlier gcd/sign evidence.
-        out.signs
-            .extend(check_pair_denominators(&p, &a, &cofactor, &domain, which)?);
-    }
-    if domain.upper_is_nonpositive() {
-        out.root_region = EffectiveBkwRootRegion::NegativeRay;
-    }
-    out.branch_selection=if order==2||supplied.is_some(){"r=0 (rational pair parameters, no algebraic branch needed)"} else if order>4 {"b is the largest positive pair-product root; monic pair-product resultant, nonvanishing branch discriminant and constant term fix its continuous selection; quadratic subresultant and nonreal-pair test identify the conjugates"}else{"b is the unique positive real pair-product root: quartic discriminant < 0 and constant coefficient < 0 give a nonreal pair and two opposite-sign real cofactor roots"}.into();
-    out.signs.push(check_univariate(
-        if ray && supplied.is_some() {
-            "nonvanishing supplied pair discriminant on ray"
-        } else if ray {
-            "nonvanishing characteristic discriminant on ray"
-        } else {
-            "characteristic discriminant < 0"
-        },
-        &disc,
-        &domain,
-        if ray { ray_discriminant_sign } else { -1 },
-    )?);
-    if order == 4 && supplied.is_none() {
-        out.signs.push(check_univariate(
-            if ray {
-                "nonzero characteristic constant on ray"
-            } else {
-                "opposite-sign cofactor roots"
-            },
-            &d[4],
-            &domain,
-            if ray && d[4].evaluate(&domain.sample).is_positive() {
-                1
-            } else {
-                -1
-            },
-        )?);
-    }
-    if ray {
-        out.branch_selection = if matches!(which,Branch::Zero) {"r=0; exact polynomial pair parameters"} else {"largest positive quartic pair product; nonreal-pair and strict cofactor-modulus tests identify the dominant conjugates"}.into();
-        out.signs.push(check_sign(
-            "quartic pair denominator b^2-D4",
-            &p,
-            &b.square().sub(&R::of(t(&d[4]))).signed_polynomial(&p),
-            &domain,
+    certify_pair_chart(
+        PairChart {
+            order,
+            supplied: supplied.is_some(),
+            ray,
+            ray_discriminant_sign,
+            p: &p,
+            disc: &disc,
+            d,
+            a: &a,
+            b: &b,
+            cofactor: &cofactor,
+            domain: &domain,
             which,
-            1,
-        )?);
-    }
+        },
+        &mut out,
+    )?;
     let y2 = b.sub(&a.square());
     if !legacy
         && order > 4
@@ -574,145 +502,27 @@ fn certify_with_pair(
             out,
         );
     }
-    let imag_poly = imaginary.signed_polynomial(&p);
-    let imaginary_zero = imag_poly.is_zero();
-    let mut positive_real_lift = false;
-    if !imaginary_zero {
-        match check_sign("Im(N/H)/Im(lambda) < 0", &p, &imag_poly, &domain, which, -1) {
-            Ok(sign) => out.signs.push(sign),
-            Err(RecurrenceError::Unsupported(_)) if !legacy => {
-                let real_a = if order == 4 && supplied.is_none() {
-                    let g = b.square().sub(&R::of(t(&d[4])));
-                    real.scale(&(q(1) / q(2))).add(&a.mul(&g).mul(&imaginary))
-                } else {
-                    real.add(&a.mul(&imaginary))
-                };
-                out.signs.push(check_sign(
-                    "positive real part of pair amplitude",
-                    &p,
-                    &real_a.signed_polynomial(&p),
-                    &domain,
-                    which,
-                    1,
-                )?);
-                positive_real_lift = true;
-            }
-            Err(error) => return Err(error),
-        }
-    }
-    let mut endpoint_signs = vec![];
-    let mut endpoint_cofactors = Vec::new();
-    for left in [true, false] {
-        if !endpoint_is_zero(&domain, &disc, left)? {
-            return Err(failure("phase endpoint is not a characteristic collision"));
-        }
-        let (x, identity) = if supplied.is_some() {
-            (
-                a.clone(),
-                "supplied pair discriminant is zero and a!=0 at the endpoint".into(),
-            )
-        } else {
-            collision_root(&characteristic, &domain, left)?
-        };
-        if endpoint_rational_sign(&domain, &x, left)? != if left { -1 } else { 1 } {
-            return Err(failure("pair collision does not have theta endpoints pi,0"));
-        }
-        let inv = R::of(c(1)).div(&x);
-        let nr = nc.iter().rev().fold(R::of(c(0)), |v, c| v.mul(&inv).add(c));
-        let cr = if supplied.is_some() {
-            cofactor
-                .iter()
-                .rev()
-                .fold(R::of(c(0)), |v, c| v.mul(&inv).add(c))
-        } else if order == 2 {
-            R::of(c(1))
-        } else {
-            let mut h = vec![R::of(c(1))];
-            for j in 1..=order - 2 {
-                let mut coefficient = R::of(t(&d[j])).add(&x.scale(&q(2)).mul(&h[j - 1]));
-                if j >= 2 {
-                    coefficient = coefficient.sub(&x.square().mul(&h[j - 2]));
-                }
-                h.push(coefficient);
-            }
-            if order > 4 {
-                endpoint_cofactors.push((left, x.clone(), h.clone()));
-            }
-            h.iter().rev().fold(R::of(c(0)), |v, c| v.mul(&inv).add(c))
-        };
-        if cr.n.is_zero() {
-            return Err(failure("endpoint pair cofactor vanishes identically"));
-        }
-        let sign = endpoint_rational_sign(&domain, &nr.div(&cr), left)?;
-        endpoint_signs.push(sign);
-        out.phase.push(format!(
-            "{} endpoint: {}; theta -> {}; F=N/H has sign {}",
-            if left { "left" } else { "right" },
-            identity,
-            if left { "pi" } else { "0" },
-            sign
-        ));
-    }
-    let winding = if positive_real_lift {
-        0
-    } else if imaginary_zero {
-        if endpoint_signs[0] != endpoint_signs[1] {
-            return Err(failure("real amplitude endpoint signs disagree"));
-        }
-        out.signs.push(check_sign(
-            "nonvanishing real amplitude",
-            &p,
-            &real.signed_polynomial(&p),
-            &domain,
+    let (positive_real_lift, endpoint_cofactors) = certify_collision_phase(
+        CollisionPhase {
+            order,
+            supplied: supplied.is_some(),
+            d,
+            characteristic: &characteristic,
+            disc: &disc,
+            p: &p,
+            a: &a,
+            b: &b,
+            cofactor: &cofactor,
+            nc: &nc,
+            imaginary: &imaginary,
+            real: &real,
+            domain: &domain,
             which,
-            endpoint_signs[1],
-        )?);
-        0
-    } else {
-        match endpoint_signs.as_slice() {
-            [-1, 1] => -1,
-            [1, -1] => 1,
-            _ => 0,
-        }
-    };
-    if !positive_real_lift
-        && degree.data.newton.is_none()
-        && (degree.count.slope != 1
-            || degree.count.divisor != 1
-            || degree.count.offsets != [0]
-            || !(winding == 0 || (winding == -1 && endpoint_signs[1] == 1)))
-    {
-        return Err(failure(
-            "phase winding and exterior sign do not close the degree budget",
-        ));
-    }
-    if !positive_real_lift {
-        out.phase.push(format!("continuous lift of arg F has winding {winding}; (n+1)*theta+arg F supplies n+{winding} sign changes by first half-integer-pi crossings"));
-    }
-    if winding == -1 && !positive_real_lift {
-        out.lean_declarations.push(
-            "RealRooted.EffectiveBKW.splits_nodup_of_strictAnti_alternating_of_leftEscape".into(),
-        );
-        out.exterior.push("right amplitude positive; leftmost sample sign (-1)^(n-1), positive top coefficient gives sign (-1)^n at -infinity, hence one further real zero".into());
-    }
-    let delta = |sign: i8| {
-        if sign > 0 {
-            q(0)
-        } else if imaginary_zero {
-            q(1)
-        } else {
-            q(-1)
-        }
-    };
-    out.phase_limits.left_amplitude_argument = (q(1) / q(2) + delta(endpoint_signs[0])).to_string();
-    out.phase_limits.right_amplitude_argument =
-        (-q(1) / q(2) + delta(endpoint_signs[1])).to_string();
-    if positive_real_lift {
-        out.phase_limits.left_amplitude_argument = (q(endpoint_signs[0].into()) / q(2)).to_string();
-        out.phase_limits.right_amplitude_argument =
-            (-q(endpoint_signs[1].into()) / q(2)).to_string();
-        out.phase.push("Re A>0 fixes the lift in (-pi/2,pi/2); the finite simple pair collisions give these one-sided amplitude arguments, independently of the winding of F".into());
-    }
+            degree,
+            legacy,
+        },
+        &mut out,
+    )?;
     out.expansion_data = EffectiveBkwExpansionData {
         pair_real_part: a.wire(),
         pair_norm_squared: b.wire(),
@@ -778,6 +588,317 @@ fn certify_with_pair(
         super::degree::close_phase(&mut out)?;
     }
     Ok(out)
+}
+
+// Check branch separation and discriminant signs before amplitude work.
+struct PairChart<'a> {
+    order: usize,
+    supplied: bool,
+    ray: bool,
+    ray_discriminant_sign: i8,
+    p: &'a B,
+    disc: &'a P,
+    d: &'a [P],
+    a: &'a R,
+    b: &'a R,
+    cofactor: &'a [R],
+    domain: &'a Domain,
+    which: Branch,
+}
+fn certify_pair_chart(
+    ctx: PairChart<'_>,
+    out: &mut EffectiveBkwCertificate,
+) -> Result<(), RecurrenceError> {
+    let PairChart {
+        order,
+        supplied,
+        ray,
+        ray_discriminant_sign,
+        p,
+        disc,
+        d,
+        a,
+        b,
+        cofactor,
+        domain,
+        which,
+    } = ctx;
+    if matches!(which, Branch::LargestPositive) {
+        let branch_discriminant = discriminant(p);
+        if (!ray
+            && (branch_discriminant.is_zero()
+                || !domain.critical_roots(&branch_discriminant)?.is_empty()))
+            || !domain
+                .critical_roots(&P::new(p.rows()[0].clone()))?
+                .is_empty()
+        {
+            return Err(failure(
+                "higher-order pair-product branches collide or cross zero in the interval",
+            ));
+        }
+        let sign = if branch_discriminant.evaluate(&domain.sample).is_positive() {
+            1
+        } else {
+            -1
+        };
+        if !ray {
+            out.signs.push(check_univariate(
+                "pair-product branch separation",
+                &branch_discriminant,
+                domain,
+                sign,
+            )?);
+        } else {
+            out.phase.push("the simple characteristic roots have a fixed real/nonreal pattern; the largest positive pair product is the maximum of continuous conjugate-pair norms and positive real-root products; any other positive mixed product is bounded by the larger conjugate-pair norm. Thus this maximum is continuous even when off-branch products collide".into());
+        }
+        let constant = P::new(p.rows()[0].clone());
+        let sign = if constant.evaluate(&domain.sample).is_positive() {
+            1
+        } else {
+            -1
+        };
+        out.signs.push(check_univariate(
+            "pair-product branches avoid zero",
+            &constant,
+            domain,
+            sign,
+        )?);
+        // This is exactly the path whose R::combine reduces modulo the
+        // relation without a gcd. Polynomial suppliers have unit denominators;
+        // legacy quartic fractions retain their earlier gcd/sign evidence.
+        out.signs
+            .extend(check_pair_denominators(p, a, cofactor, domain, which)?);
+    }
+    if domain.upper_is_nonpositive() {
+        out.root_region = EffectiveBkwRootRegion::NegativeRay;
+    }
+    out.branch_selection=if order==2||supplied{"r=0 (rational pair parameters, no algebraic branch needed)"} else if order>4 {"b is the largest positive pair-product root; monic pair-product resultant, nonvanishing branch discriminant and constant term fix its continuous selection; quadratic subresultant and nonreal-pair test identify the conjugates"}else{"b is the unique positive real pair-product root: quartic discriminant < 0 and constant coefficient < 0 give a nonreal pair and two opposite-sign real cofactor roots"}.into();
+    out.signs.push(check_univariate(
+        if ray && supplied {
+            "nonvanishing supplied pair discriminant on ray"
+        } else if ray {
+            "nonvanishing characteristic discriminant on ray"
+        } else {
+            "characteristic discriminant < 0"
+        },
+        disc,
+        domain,
+        if ray { ray_discriminant_sign } else { -1 },
+    )?);
+    if order == 4 && !supplied {
+        out.signs.push(check_univariate(
+            if ray {
+                "nonzero characteristic constant on ray"
+            } else {
+                "opposite-sign cofactor roots"
+            },
+            &d[4],
+            domain,
+            if ray && d[4].evaluate(&domain.sample).is_positive() {
+                1
+            } else {
+                -1
+            },
+        )?);
+    }
+    if ray {
+        out.branch_selection = if matches!(which,Branch::Zero) {"r=0; exact polynomial pair parameters"} else {"largest positive quartic pair product; nonreal-pair and strict cofactor-modulus tests identify the dominant conjugates"}.into();
+        out.signs.push(check_sign(
+            "quartic pair denominator b^2-D4",
+            p,
+            &b.square().sub(&R::of(t(&d[4]))).signed_polynomial(p),
+            domain,
+            which,
+            1,
+        )?);
+    }
+    Ok(())
+}
+
+// Endpoint collisions and the continuous amplitude lift are separate from
+// the search for domination constants and from degree-budget closure.
+struct CollisionPhase<'a> {
+    order: usize,
+    supplied: bool,
+    d: &'a [P],
+    characteristic: &'a B,
+    disc: &'a P,
+    p: &'a B,
+    a: &'a R,
+    b: &'a R,
+    cofactor: &'a [R],
+    nc: &'a [R],
+    imaginary: &'a R,
+    real: &'a R,
+    domain: &'a Domain,
+    which: Branch,
+    degree: &'a DegreeBudget,
+    legacy: bool,
+}
+type EndpointCofactors = Vec<(bool, R, Vec<R>)>;
+fn certify_collision_phase(
+    ctx: CollisionPhase<'_>,
+    out: &mut EffectiveBkwCertificate,
+) -> Result<(bool, EndpointCofactors), RecurrenceError> {
+    let CollisionPhase {
+        order,
+        supplied,
+        d,
+        characteristic,
+        disc,
+        p,
+        a,
+        b,
+        cofactor,
+        nc,
+        imaginary,
+        real,
+        domain,
+        which,
+        degree,
+        legacy,
+    } = ctx;
+    let imag_poly = imaginary.signed_polynomial(p);
+    let imaginary_zero = imag_poly.is_zero();
+    let mut positive_real_lift = false;
+    if !imaginary_zero {
+        match check_sign("Im(N/H)/Im(lambda) < 0", p, &imag_poly, domain, which, -1) {
+            Ok(sign) => out.signs.push(sign),
+            Err(RecurrenceError::Unsupported(_)) if !legacy => {
+                let real_a = if order == 4 && !supplied {
+                    let g = b.square().sub(&R::of(t(&d[4])));
+                    real.scale(&(q(1) / q(2))).add(&a.mul(&g).mul(imaginary))
+                } else {
+                    real.add(&a.mul(imaginary))
+                };
+                out.signs.push(check_sign(
+                    "positive real part of pair amplitude",
+                    p,
+                    &real_a.signed_polynomial(p),
+                    domain,
+                    which,
+                    1,
+                )?);
+                positive_real_lift = true;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    let mut endpoint_signs = vec![];
+    let mut endpoint_cofactors = Vec::new();
+
+    for left in [true, false] {
+        if !endpoint_is_zero(domain, disc, left)? {
+            return Err(failure("phase endpoint is not a characteristic collision"));
+        }
+        let (x, identity) = if supplied {
+            (
+                a.clone(),
+                "supplied pair discriminant is zero and a!=0 at the endpoint".into(),
+            )
+        } else {
+            collision_root(characteristic, domain, left)?
+        };
+        if endpoint_rational_sign(domain, &x, left)? != if left { -1 } else { 1 } {
+            return Err(failure("pair collision does not have theta endpoints pi,0"));
+        }
+        let inv = R::of(c(1)).div(&x);
+        let nr = nc.iter().rev().fold(R::of(c(0)), |v, c| v.mul(&inv).add(c));
+        let cr = if supplied {
+            cofactor
+                .iter()
+                .rev()
+                .fold(R::of(c(0)), |v, c| v.mul(&inv).add(c))
+        } else if order == 2 {
+            R::of(c(1))
+        } else {
+            let mut h = vec![R::of(c(1))];
+            for j in 1..=order - 2 {
+                let mut coefficient = R::of(t(&d[j])).add(&x.scale(&q(2)).mul(&h[j - 1]));
+                if j >= 2 {
+                    coefficient = coefficient.sub(&x.square().mul(&h[j - 2]));
+                }
+                h.push(coefficient);
+            }
+            if order > 4 {
+                endpoint_cofactors.push((left, x.clone(), h.clone()));
+            }
+            h.iter().rev().fold(R::of(c(0)), |v, c| v.mul(&inv).add(c))
+        };
+        if cr.n.is_zero() {
+            return Err(failure("endpoint pair cofactor vanishes identically"));
+        }
+        let sign = endpoint_rational_sign(domain, &nr.div(&cr), left)?;
+        endpoint_signs.push(sign);
+        out.phase.push(format!(
+            "{} endpoint: {}; theta -> {}; F=N/H has sign {}",
+            if left { "left" } else { "right" },
+            identity,
+            if left { "pi" } else { "0" },
+            sign
+        ));
+    }
+    let winding = if positive_real_lift {
+        0
+    } else if imaginary_zero {
+        if endpoint_signs[0] != endpoint_signs[1] {
+            return Err(failure("real amplitude endpoint signs disagree"));
+        }
+        out.signs.push(check_sign(
+            "nonvanishing real amplitude",
+            p,
+            &real.signed_polynomial(p),
+            domain,
+            which,
+            endpoint_signs[1],
+        )?);
+        0
+    } else {
+        match endpoint_signs.as_slice() {
+            [-1, 1] => -1,
+            [1, -1] => 1,
+            _ => 0,
+        }
+    };
+    if !positive_real_lift
+        && degree.data.newton.is_none()
+        && (degree.count.slope != 1
+            || degree.count.divisor != 1
+            || degree.count.offsets != [0]
+            || !(winding == 0 || (winding == -1 && endpoint_signs[1] == 1)))
+    {
+        return Err(failure(
+            "phase winding and exterior sign do not close the degree budget",
+        ));
+    }
+    if !positive_real_lift {
+        out.phase.push(format!("continuous lift of arg F has winding {winding}; (n+1)*theta+arg F supplies n+{winding} sign changes by first half-integer-pi crossings"));
+    }
+    if winding == -1 && !positive_real_lift {
+        out.lean_declarations.push(
+            "RealRooted.EffectiveBKW.splits_nodup_of_strictAnti_alternating_of_leftEscape".into(),
+        );
+        out.exterior.push("right amplitude positive; leftmost sample sign (-1)^(n-1), positive top coefficient gives sign (-1)^n at -infinity, hence one further real zero".into());
+    }
+    let delta = |sign: i8| {
+        if sign > 0 {
+            q(0)
+        } else if imaginary_zero {
+            q(1)
+        } else {
+            q(-1)
+        }
+    };
+    out.phase_limits.left_amplitude_argument = (q(1) / q(2) + delta(endpoint_signs[0])).to_string();
+    out.phase_limits.right_amplitude_argument =
+        (-q(1) / q(2) + delta(endpoint_signs[1])).to_string();
+    if positive_real_lift {
+        out.phase_limits.left_amplitude_argument = (q(endpoint_signs[0].into()) / q(2)).to_string();
+        out.phase_limits.right_amplitude_argument =
+            (-q(endpoint_signs[1].into()) / q(2)).to_string();
+        out.phase.push("Re A>0 fixes the lift in (-pi/2,pi/2); the finite simple pair collisions give these one-sided amplitude arguments, independently of the winding of F".into());
+    }
+    Ok((positive_real_lift, endpoint_cofactors))
 }
 
 /// A characteristic collision can belong to the cofactor. After deflating

@@ -265,6 +265,7 @@ macro_rules! define_theorem_routes {
 
         /// The theorem a [`RealRootednessTheoremReport`] applies.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+        #[non_exhaustive]
         pub enum RealRootednessTheorem {
             $($(#[$doc])* #[serde(rename = $name)] $variant,)*
         }
@@ -660,6 +661,11 @@ impl RealRootednessTheoremReport {
                     .as_ref()
                     .is_some_and(|w| w.domination_cutoff.is_none())
             });
+        if legacy_effective_bkw {
+            return Err(RecurrenceError::VerificationFailed(
+                "legacy effective-BKW certificate lacks domination_cutoff; regenerate it".into(),
+            ));
+        }
         let recomputed = check_with_start_delay_mode(
             self.theorem,
             &rule,
@@ -667,7 +673,7 @@ impl RealRootednessTheoremReport {
             &seeds,
             &options,
             self.start_delay,
-            legacy_effective_bkw,
+            false,
         )?;
         if &recomputed != self {
             if self.certificate != recomputed.certificate {

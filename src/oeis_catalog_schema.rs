@@ -125,10 +125,10 @@ pub enum OeisRealRootednessStatus {
     /// Every row is zero or real-rooted, by a machine-checked Lean proof
     /// (axioms limited to `propext`, `Classical.choice` and `Quot.sound`) for
     /// a definition whose rows equal the catalog rows at every index.  The
-    /// equality was established by an exact all-index argument: the two
+    /// equality was established by an exact all-index argument (for example, the two
     /// recurrences have the same normal form after the index shift that
     /// aligns the rows, the catalog leader never vanishes on the computed
-    /// rows, and the rows before both rules apply agree exactly.  Finitely
+    /// rows, and the rows before both rules apply agree exactly). Finitely
     /// many leading catalog rows that precede the Lean definition's first row
     /// were checked exactly instead.  The proof is not part of polytool.
     LeanProved,
@@ -155,6 +155,10 @@ pub struct OeisCatalogRealRootedness {
     /// Date (`YYYY-MM-DD`) of the proof snapshot or check the flag records.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub as_of: Option<String>,
+    /// Optional public audit evidence; absent in older records. This is an
+    /// attestation, not a proof certificate checked by polytool.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit: Option<String>,
 }
 
 /// A coefficient property recorded by a catalog [`OeisCatalogEvidence`] record,
@@ -433,6 +437,7 @@ pub struct OeisCatalogRecord {
 /// [`Display`](std::fmt::Display) text of each variant is the message of the
 /// former `String` error.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum OeisCatalogError {
     /// A data-file line is not a valid JSON catalog record.
     InvalidJsonLine {

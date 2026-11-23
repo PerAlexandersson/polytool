@@ -208,14 +208,15 @@ within the prescribed initial rows. The nonsingular recurrence and matching
 seeds therefore identify all rows with the upstream formulas. Exact replay
 through native row 80 provides an additional finite check.
 
-All nine carry the existing `real_rootedness` attestation fields
-`status: lean_proved`, `as_of: 2026-11-22`. Their upstream proofs are Lean
-files in a separate formalization corpus, at a fixed revision.
-We inspected all nine files and their locally available import closure:
-none contains executable `sorry`, `admit` or a custom `axiom`. The direct
-file hashes agree with the source snapshot used for the recurrence
-identities. We performed no new Lean build; these flags record the upstream
-proofs and the all-index definition bridges.
+All nine carry `status: lean_proved`, `as_of: 2026-11-22` and an optional
+`audit` field: external formalization corpus, audited 2026-11-23, standard
+axioms (`propext`, `Classical.choice`, `Quot.sound`). A later downstream build
+and axiom audit passed, with stretch scope 157/157. The same external audit
+evidence is recorded for A266178 and A266298. The corpus is unpublished;
+Polytool does not bundle or independently rebuild these proofs. The audit
+and the all-index definition bridges above support the attestations; consumers
+still report `conditional_on_attestation` when relying on them. The earlier
+source-only inspection has been superseded by this build and axiom audit.
 
 ## Polytool proof discovery
 

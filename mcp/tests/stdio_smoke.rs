@@ -103,6 +103,12 @@ fn lists_tools_and_calls_properties() {
         .flat_map(|line| line.split([',', ' ']))
         .filter(|name| !name.is_empty())
         .collect();
+    for name in &tool_names {
+        assert!(
+            include_str!("../README.md").contains(&format!("`{name}`")),
+            "MCP README must document {name}"
+        );
+    }
     let listed_tools = tool_names.iter().copied().collect();
     assert_eq!(
         mapped_tools, listed_tools,
@@ -133,7 +139,9 @@ fn lists_tools_and_calls_properties() {
         .iter()
         .find(|t| t["name"] == "stability_univariate")
         .unwrap();
-    assert!(stability_tool["description"].as_str().unwrap().len() <= 600);
+    let description = stability_tool["description"].as_str().unwrap();
+    assert!(description.len() <= 600);
+    assert!(description.contains("Degree <=32, coefficient bits <=256, batch <=512"));
     assert_eq!(
         stability_tool["inputSchema"]["properties"]["polynomials"]["maxItems"],
         512

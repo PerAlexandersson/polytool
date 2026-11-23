@@ -214,7 +214,19 @@ fn stored_effective_bkw_supplier_modes_replay_without_drift() {
                 .is_none(),
             legacy
         );
-        report.verify().unwrap();
+        if legacy {
+            assert!(report
+                .verify()
+                .unwrap_err()
+                .to_string()
+                .contains("legacy certificate"));
+            polytool::bkw::effective::certify_effective_bkw(&report.request)
+                .unwrap()
+                .verify()
+                .unwrap();
+        } else {
+            report.verify().unwrap();
+        }
         let mut altered = report.clone();
         altered.certificate.as_mut().unwrap().cutoff += 1;
         assert!(altered.verify().is_err());

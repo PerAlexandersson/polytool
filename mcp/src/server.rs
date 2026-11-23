@@ -107,7 +107,7 @@ impl PolynomialToolsServer {
     }
 
     #[tool(
-        description = "Count roots exactly in half-planes, disks, exteriors or Gaussian Möbius images. Accepts exact expressions with I or ascending Gaussian coefficient arrays. Returns compact counts/verdict/meaning; detail:full includes replay certificates. Configured report storage returns report_id for read_report. Degree <=500, batch <=512; floats rejected. See tool_help for syntax, conventions and limits."
+        description = "Count roots exactly in half-planes, disks, exteriors or Gaussian Möbius images. Accepts exact expressions with I or ascending Gaussian coefficient arrays. Returns compact counts/verdict/meaning; detail:full includes replay certificates. Configured report storage returns report_id for read_report. Degree <=32, coefficient bits <=256, batch <=512; floats rejected. See tool_help for syntax, conventions and limits."
     )]
     pub fn stability_univariate(
         &self,
@@ -2053,3 +2053,24 @@ With report storage configured, use report_id handles and read_report with selec
 Set detail:"full" for complete reports (stored handles when configured); catalog pages use next_offset.
 Generated code is opt-in: include_code:true. Rust replay is not Lean replay.
 "#;
+
+#[cfg(test)]
+mod description_tests {
+    use super::*;
+
+    #[test]
+    fn stability_description_uses_the_enforced_limits() {
+        let tools = PolynomialToolsServer::tool_router().list_all();
+        let tool = tools
+            .iter()
+            .find(|tool| tool.name == "stability_univariate")
+            .unwrap();
+        let expected = format!(
+            "Degree <={}, coefficient bits <={}, batch <={}",
+            crate::limits::MCP_MAX_STABILITY_DEGREE,
+            crate::limits::MCP_MAX_STABILITY_COEFFICIENT_BITS,
+            crate::limits::MCP_MAX_BATCH_POLYNOMIALS
+        );
+        assert!(tool.description.as_deref().unwrap().contains(&expected));
+    }
+}

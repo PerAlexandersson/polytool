@@ -56,10 +56,11 @@ fn oeis_entry_json(entry: &polytool::oeis::OeisSequenceDefinition) -> Value {
         "source_rows": entry.source_rows,
         "verification_rows": entry.verification_rows,
         "rows_sha256": entry.rows_sha256,
-        "real_rootedness": entry.real_rootedness().map(|flag| json!({
-            "status": flag.status.as_str(),
-            "as_of": flag.as_of,
-        })),
+        "real_rootedness": entry.real_rootedness().map(|flag| {
+            let mut flag_json = json!({"status": flag.status.as_str(), "as_of": flag.as_of});
+            if let Some(audit) = flag.audit { flag_json["audit"] = json!(audit); }
+            flag_json
+        }),
         "evidence": entry.evidence().map(|evidence| evidence::evidence_json(
             evidence.strongest,
             evidence.rows_checked,
@@ -432,5 +433,21 @@ pub(crate) fn cmd_oeis(args: &[String]) {
         other => {
             crate::input::usage_error("oeis", &format!("unknown oeis subcommand: {other}"));
         }
+    }
+}
+
+#[cfg(test)]
+mod metadata_tests {
+    //! Catalog attestation evidence in CLI metadata.
+    use super::*;
+    #[test]
+    fn audit_is_exposed_only_when_recorded() {
+        let audited = oeis_entry_json(polytool::oeis::A266178());
+        assert!(audited["real_rootedness"]["audit"]
+            .as_str()
+            .unwrap()
+            .contains("audited 2026-11-23"));
+        let legacy = oeis_entry_json(polytool::oeis::A001263());
+        assert!(legacy["real_rootedness"].get("audit").is_none());
     }
 }

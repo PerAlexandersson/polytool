@@ -27,7 +27,7 @@ version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' "$script_dir/Cargo.toml")
 commit=unknown
 # Match the library build script: only trust Git if the manifest is tracked.
 if git -C "$script_dir" ls-files --error-unmatch Cargo.toml >/dev/null 2>&1; then
-  revision=$(git -C "$script_dir" rev-parse --verify HEAD 2>/dev/null || true)
+  revision=$(git -C "$script_dir" log -1 --format=%H -- "$script_dir/.." 2>/dev/null || true)
   if [[ $revision =~ ^[0-9a-fA-F]{12,}$ ]]; then
     commit=$(printf '%.12s' "$revision" | tr '[:upper:]' '[:lower:]')
   fi

@@ -82,9 +82,6 @@ fn add(p: &[Q], q: &[Q]) -> Vec<Q> {
 fn sub(p: &[Q], q: &[Q]) -> Vec<Q> {
     vp::sub(p, q)
 }
-fn scale(p: &[Q], q: i64) -> Vec<Q> {
-    vp::scale(p, &Q::from_integer(q.into()))
-}
 fn wronskian(a: &Biv, b: &Biv) -> Vec<Q> {
     sub(
         &mul(&column(a, 1), &column(b, 0)),
@@ -147,40 +144,13 @@ fn symbolic(
     if !nonnegative(&neg(&aa)) || !nonnegative(&neg(&d0)) || !nonnegative(&neg(&d2)) {
         return None;
     }
-    let half = Q::new(1.into(), 2.into());
-    let q2 = vec![
-        vec![neg(&aa), vp::scale(&neg(&kk), &half)],
-        vec![vp::scale(&neg(&kk), &half), neg(&cc)],
-    ];
-    let kd = add(&kk, &d1);
-    let cross = vp::scale(
-        &sub(
-            &add(&scale(&mul(&aa, &cc), 4), &scale(&mul(&d2, &d0), 4)),
-            &mul(&kd, &kd),
-        ),
-        &half,
-    );
-    let q3 = vec![
-        vec![
-            scale(&mul(&aa, &d0), 4),
-            scale(&mul(&aa, &d1), -2),
-            cross.clone(),
-        ],
-        vec![
-            scale(&mul(&aa, &d1), -2),
-            scale(&mul(&aa, &d2), 4),
-            scale(&mul(&d2, &kk), 2),
-        ],
-        vec![cross, scale(&mul(&d2, &kk), 2), scale(&mul(&d2, &cc), 4)],
-    ];
+    let parameters = [aa, cc, kk, d0, d1, d2];
+    let [q2, q3] = affine_pencils::pencil_forms(&parameters);
     Some(SymbolicPencilCertificate {
         rows,
         columns,
         zero_side: false,
-        wronskian_parameters: [aa, cc, kk, d0, d1, d2]
-            .iter()
-            .map(|p| strings(p))
-            .collect(),
+        wronskian_parameters: parameters.iter().map(|p| strings(p)).collect(),
         copositivity: vec![coefficient_copositive(&q2)?, coefficient_copositive(&q3)?],
     })
 }

@@ -215,7 +215,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn legacy_effective_wrapper_replays_and_rejects_mutations() {
+    fn legacy_effective_wrapper_requires_regeneration() {
         let record: RecurrenceJson = serde_json::from_value(serde_json::json!({
             "schema":"polytool.recurrence.v1", "first_index":0,
             "initial_polynomials":[["1"],["0","2"]],
@@ -246,7 +246,22 @@ mod tests {
                 .unwrap()
                 .domination_cutoff
                 .is_none());
-            report.verify().unwrap();
+            assert!(report
+                .verify()
+                .unwrap_err()
+                .to_string()
+                .contains("legacy effective-BKW"));
+            let current = super::super::check_with_start_delay_mode(
+                RealRootednessTheorem::EffectiveBkw,
+                &rule,
+                first,
+                &seeds,
+                &Default::default(),
+                delay,
+                false,
+            )
+            .unwrap();
+            current.verify().unwrap();
             let mut changed = report.clone();
             let Some(RouteCertificate::EffectiveBkw(c)) = changed.certificate.as_mut() else {
                 unreachable!()

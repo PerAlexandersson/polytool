@@ -58,7 +58,7 @@ fn git_commit(manifest_dir: &Path) -> Option<String> {
     git_output(manifest_dir, &["ls-files", "--error-unmatch", "Cargo.toml"])?;
     normalized_commit(&git_output(
         manifest_dir,
-        &["rev-parse", "--verify", "HEAD"],
+        &["log", "-1", "--format=%H", "--", "."],
     )?)
 }
 
@@ -328,19 +328,23 @@ fn render_oeis_catalog(records: &[OeisCatalogRecord]) -> String {
     }
     out.push_str("];\n\n");
     out.push_str(
-        "/// `(id, status, as_of)` of every entry with a real-rootedness flag, sorted by id.\n",
+        "/// `(id, status, as_of, audit)` of every entry with a real-rootedness flag, sorted by id.\n",
     );
     out.push_str("pub(crate) static OEIS_REAL_ROOTEDNESS: ");
-    out.push_str("&[(&str, OeisRealRootednessStatus, Option<&str>)] = &[\n");
+    out.push_str("&[(&str, OeisRealRootednessStatus, Option<&str>, Option<&str>)] = &[\n");
     for record in records {
         if let Some(flag) = &record.real_rootedness {
             let as_of = match &flag.as_of {
                 Some(date) => format!("Some({})", rust_string(date)),
                 None => "None".to_string(),
             };
+            let audit = match &flag.audit {
+                Some(audit) => format!("Some({})", rust_string(audit)),
+                None => "None".to_string(),
+            };
             let _ = writeln!(
                 out,
-                "    ({}, OeisRealRootednessStatus::{}, {as_of}),",
+                "    ({}, OeisRealRootednessStatus::{}, {as_of}, {audit}),",
                 rust_string(&record.id),
                 real_rootedness_variant(flag.status)
             );

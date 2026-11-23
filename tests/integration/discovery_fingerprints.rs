@@ -5,7 +5,9 @@
 //! hash of the complete JSON of [`discover_recurrence_proofs`] (default
 //! options) and of [`prove_parent_real_rootedness`] (first index, no
 //! attestations, root-domain route enabled), or of the error text.  The
-//! fixture `tests/fixtures/discovery-report-fingerprints.tsv` is the evidence
+//! fixture also retains discovery status, stage, route and scope plus parent
+//! status/route as JSON columns. These expose verdict changes in a review.
+//! `tests/fixtures/discovery-report-fingerprints.tsv` is the evidence
 //! gate for refactorings of the theorem routes: a behaviour-preserving
 //! change must leave every fingerprint unchanged.
 //!
@@ -56,37 +58,63 @@ fn fingerprint(text: &str) -> String {
     format!("{hash:016x}:{}", text.len())
 }
 
+/// Hashes and reviewable verdicts of one discovery/parent pair.
+struct EntryFingerprints {
+    discovery_hash: String,
+    parent_hash: String,
+    discovery_summary: serde_json::Value,
+    parent_summary: serde_json::Value,
+}
+impl EntryFingerprints {
+    fn tsv(&self) -> String {
+        format!(
+            "{}\t{}\t{}\t{}",
+            self.discovery_hash, self.parent_hash, self.discovery_summary, self.parent_summary
+        )
+    }
+}
+
 /// The two fingerprints (discovery report, parent proof) of one entry.
-fn entry_fingerprints(entry: &OeisSequenceDefinition) -> Option<(String, String)> {
+fn entry_fingerprints(entry: &OeisSequenceDefinition) -> Option<EntryFingerprints> {
     let (rule, seeds) = entry.recurrence_parts().ok()?;
     let first_index = entry.recurrence_first_index;
     let record = RecurrenceJson::from_recurrence_rational(&rule, first_index, &seeds, None);
-    let (discovery, status, summary_bytes) =
-        match discover_recurrence_proofs(&record, &RealRootednessTheoremOptions::default()) {
-            Ok(report) => {
-                let summary = report.summary();
-                assert_eq!(summary.status, report.status, "{}", entry.id);
-                assert_eq!(
-                    summary.real_rooted_from_index, report.real_rooted_from_index,
-                    "{}",
-                    entry.id
-                );
-                assert_eq!(
-                    summary.real_rooted_outside_zero_residue_classes,
-                    report.real_rooted_outside_zero_residue_classes,
-                    "{}",
-                    entry.id
-                );
-                let bytes = serde_json::to_vec(&summary).unwrap().len();
-                assert!(bytes <= 2048, "{} summary: {bytes} bytes", entry.id);
-                (
-                    serde_json::to_string(&report).unwrap(),
-                    report.status,
-                    Some(bytes),
-                )
-            }
-            Err(error) => (format!("error: {error}"), "error".into(), None),
-        };
+    let (discovery, status, summary_bytes, verdict_summary) = match discover_recurrence_proofs(
+        &record,
+        &RealRootednessTheoremOptions::default(),
+    ) {
+        Ok(report) => {
+            let summary = report.summary();
+            assert_eq!(summary.status, report.status, "{}", entry.id);
+            assert_eq!(
+                summary.real_rooted_from_index, report.real_rooted_from_index,
+                "{}",
+                entry.id
+            );
+            assert_eq!(
+                summary.real_rooted_outside_zero_residue_classes,
+                report.real_rooted_outside_zero_residue_classes,
+                "{}",
+                entry.id
+            );
+            let bytes = serde_json::to_vec(&summary).unwrap().len();
+            assert!(bytes <= 2048, "{} summary: {bytes} bytes", entry.id);
+            (
+                serde_json::to_string(&report).unwrap(),
+                report.status,
+                Some(bytes),
+                serde_json::json!({"status": summary.status, "stage": summary.stage, "route": summary.route,
+                        "from_index": summary.real_rooted_from_index, "simple_roots": summary.simple_roots,
+                        "interlacing": summary.interlacing, "zero_classes": summary.real_rooted_outside_zero_residue_classes}),
+            )
+        }
+        Err(error) => (
+            format!("error: {error}"),
+            "error".into(),
+            None,
+            serde_json::json!({"status":"error"}),
+        ),
+    };
     let parent_record = ParentRecurrenceRecord {
         rule: &rule,
         seeds: &seeds,
@@ -96,7 +124,16 @@ fn entry_fingerprints(entry: &OeisSequenceDefinition) -> Option<(String, String)
         Ok(proof) => serde_json::to_string(&proof).unwrap(),
         Err(error) => format!("error: {error}"),
     };
-    let fingerprints = (fingerprint(&discovery), fingerprint(&parent));
+    let parent_summary = serde_json::from_str::<serde_json::Value>(&parent)
+        .ok()
+        .map(|p| serde_json::json!({"status":p["status"], "route":p["route"]}))
+        .unwrap_or(serde_json::json!({"status":"error"}));
+    let fingerprints = EntryFingerprints {
+        discovery_hash: fingerprint(&discovery),
+        parent_hash: fingerprint(&parent),
+        discovery_summary: verdict_summary,
+        parent_summary,
+    };
     // Optional complete reports make intentional fingerprint changes reviewable.
     if let Some(directory) = std::env::var_os("POLYTOOL_DISCOVERY_REPORT_DIR") {
         let directory = std::path::PathBuf::from(directory);
@@ -115,7 +152,7 @@ fn entry_fingerprints(entry: &OeisSequenceDefinition) -> Option<(String, String)
             .append(true)
             .open(path)
             .unwrap();
-        writeln!(file,"{}",serde_json::json!({"id":entry.id,"status":status,"discovery":fingerprints.0,"parent":fingerprints.1,"summary_bytes":summary_bytes})).unwrap();
+        writeln!(file,"{}",serde_json::json!({"id":entry.id,"status":status,"discovery":fingerprints.discovery_hash,"parent":fingerprints.parent_hash,"summary_bytes":summary_bytes})).unwrap();
     }
     Some(fingerprints)
 }
@@ -124,7 +161,7 @@ fn entry_fingerprints(entry: &OeisSequenceDefinition) -> Option<(String, String)
 fn limited_fingerprints(
     entry: &'static OeisSequenceDefinition,
     limit: Duration,
-) -> Option<(String, String)> {
+) -> Option<EntryFingerprints> {
     let (sender, receiver) = mpsc::channel();
     std::thread::Builder::new()
         .stack_size(256 << 20)
@@ -164,7 +201,7 @@ fn check_entries(entries: Vec<&'static OeisSequenceDefinition>) {
     let print_times = std::env::var_os("POLYTOOL_DISCOVERY_TIMES").is_some();
     for entry in entries {
         let started = Instant::now();
-        let Some((discovery, parent)) = limited_fingerprints(entry, limit) else {
+        let Some(fingerprints) = limited_fingerprints(entry, limit) else {
             continue;
         };
         if print_times {
@@ -173,7 +210,7 @@ fn check_entries(entries: Vec<&'static OeisSequenceDefinition>) {
         let line = expected
             .get(entry.id)
             .unwrap_or_else(|| panic!("{} has no recorded fingerprint", entry.id));
-        assert_eq!(&format!("{discovery}\t{parent}"), line, "{}", entry.id);
+        assert_eq!(&fingerprints.tsv(), line, "{}", entry.id);
         checked += 1;
     }
     assert!(checked > 0);
@@ -207,8 +244,8 @@ fn every_catalog_entry_matches_recorded_fingerprints() {
         let started = Instant::now();
         let mut text = String::new();
         for entry in catalog() {
-            if let Some((discovery, parent)) = limited_fingerprints(entry, limit) {
-                text.push_str(&format!("{}\t{discovery}\t{parent}\n", entry.id));
+            if let Some(fingerprints) = limited_fingerprints(entry, limit) {
+                text.push_str(&format!("{}\t{}\n", entry.id, fingerprints.tsv()));
             }
         }
         std::fs::write(FINGERPRINTS, text).unwrap();

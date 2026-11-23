@@ -213,6 +213,8 @@ pub struct OeisRealRootedness {
     pub status: OeisRealRootednessStatus,
     /// Date (`YYYY-MM-DD`) of the proof snapshot or check, when recorded.
     pub as_of: Option<&'static str>,
+    /// Public audit evidence, when supplied by the catalog attestation.
+    pub audit: Option<&'static str>,
 }
 
 /// The evidence record of a bundled catalog entry (see
@@ -467,11 +469,15 @@ impl OeisSequenceDefinition {
     /// another catalog file still reads the bundled flag of its id.
     pub fn real_rootedness(&self) -> Option<OeisRealRootedness> {
         OEIS_REAL_ROOTEDNESS
-            .binary_search_by_key(&self.id, |(id, _, _)| id)
+            .binary_search_by_key(&self.id, |(id, _, _, _)| id)
             .ok()
             .map(|index| {
-                let (_, status, as_of) = OEIS_REAL_ROOTEDNESS[index];
-                OeisRealRootedness { status, as_of }
+                let (_, status, as_of, audit) = OEIS_REAL_ROOTEDNESS[index];
+                OeisRealRootedness {
+                    status,
+                    as_of,
+                    audit,
+                }
             })
     }
 
@@ -914,13 +920,14 @@ pub fn entries_with_real_rootedness_flag(
 ) -> impl Iterator<Item = (&'static OeisSequenceDefinition, OeisRealRootedness)> {
     OEIS_REAL_ROOTEDNESS
         .iter()
-        .filter_map(|(id, status, as_of)| {
+        .filter_map(|(id, status, as_of, audit)| {
             by_id(id).map(|entry| {
                 (
                     entry,
                     OeisRealRootedness {
                         status: *status,
                         as_of: *as_of,
+                        audit: *audit,
                     },
                 )
             })

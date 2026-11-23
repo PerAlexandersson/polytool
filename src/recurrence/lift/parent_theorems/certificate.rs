@@ -14,6 +14,7 @@ macro_rules! route_certificates {
         /// Each report carries at most one; replay checks that it is its own theorem.
         #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
         #[serde(rename_all = "snake_case")]
+        #[non_exhaustive]
         pub enum RouteCertificate {
             $($(#[$doc])* $variant($payload),)*
         }

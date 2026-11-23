@@ -50,8 +50,8 @@ Each candidate reports separately:
 failed candidate, with an exact preservation witness when one is found.
 Search failure does not refute real-rootedness of the target family.
 
-The report schema is `polytool.interlacing-refinement.v1`. Replay recomputes
-its candidates, identities, fits and preservation data exactly. The field
+The report schema is `polytool.interlacing-refinement.v1`. Replay checks
+recorded candidates and transitions directly; successful fits are not rerun. The field
 `lean_replay` is `not_attempted`.
 
 ## Algebra and search bounds
@@ -180,3 +180,16 @@ Related Lean: `RealRooted.HalfStepRows.strictInterl_add_of_le`,
 The route proves A059022 and A059023 and also applies to A008299,
 A124324 and A136011. Its certificate records the lag and the exact extra
 seed weights. Normal recurrence proof discovery and replay include it.
+
+## Replay scope
+
+`verify_interlacing_refinements` consumes each recorded transition as a supplied
+witness: it checks the exact Ore intertwiner and scalar recovery, initial
+vector and degree conditions, denominator signs and all preservation pencils.
+It does not regenerate coordinates or fit a successful transition. Failed
+candidates without a transition still rerun their bounded fit to validate the
+negative diagnostic. Preservation arithmetic and the optional scale interval
+are re-derived using the same exact kernels as discovery. Candidate ordering,
+search completeness and the candidate-limit flag are discovery metadata;
+they do not enter the mathematical conclusion. A verified `not_proved` report
+still proves no infinite-family assertion.

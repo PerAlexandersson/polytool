@@ -18,7 +18,7 @@ fn serialized<T: serde::Serialize>(value: T) -> String {
         .to_string()
 }
 
-/// Every parent route (the enum has no `ALL`).
+/// Frozen parent-route declaration order.
 const PARENT_ROUTES: [VeroneseParentProofRoute; 24] = [
     VeroneseParentProofRoute::PeriodicProduct,
     VeroneseParentProofRoute::ProductRecurrence,
@@ -46,38 +46,6 @@ const PARENT_ROUTES: [VeroneseParentProofRoute; 24] = [
     VeroneseParentProofRoute::Attestation,
 ];
 
-/// Fails to compile when a parent route is added without extending
-/// [`PARENT_ROUTES`].
-fn parent_routes_are_listed(route: VeroneseParentProofRoute) {
-    use VeroneseParentProofRoute as R;
-    match route {
-        R::PeriodicProduct
-        | R::ProductRecurrence
-        | R::PaperTheorem
-        | R::RootDomain
-        | R::ThreeTermRecurrence
-        | R::LiuWang
-        | R::LiuWangDerivativeLag
-        | R::MaWangInterval
-        | R::LiuWangThreeTerm
-        | R::IteratedPreserver
-        | R::HypergeometricRow
-        | R::VariableDelay
-        | R::HalfStepLag
-        | R::ResidueClassSubsequences
-        | R::IndexSectionLift
-        | R::LagTwoEuler
-        | R::BinomialPerturbedEulerOrbit
-        | R::RationalPfRiordan
-        | R::ParityProduct
-        | R::DegreeLawReversal
-        | R::MatrixOrbit
-        | R::EffectiveBkw
-        | R::FactorGauge
-        | R::Attestation => {}
-    }
-}
-
 #[test]
 fn theorem_names_are_their_serialized_names() {
     for theorem in RealRootednessTheorem::ALL {
@@ -86,8 +54,8 @@ fn theorem_names_are_their_serialized_names() {
             serde_json::from_value(serde_json::Value::from(theorem.as_str())).unwrap();
         assert_eq!(parsed, theorem);
     }
+    assert_eq!(PARENT_ROUTES, VeroneseParentProofRoute::ALL);
     for route in PARENT_ROUTES {
-        parent_routes_are_listed(route);
         assert_eq!(route.as_str(), serialized(route));
     }
 }

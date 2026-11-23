@@ -2,8 +2,9 @@
 
 `bkw::effective::certify_effective_bkw` proves all-index splitting from a
 rational generating function `N(t,z)/D(t,z)`, with `D(t,0)=1`. It returns a
-replayable `EffectiveBkwReport`; `EffectiveBkwReport::verify` reconstructs
-all arithmetic and compares the complete report. Recurrence inputs reuse
+replayable `EffectiveBkwReport`; `EffectiveBkwReport::verify` checks stored
+spectral, sign-grid and finite-row data, then regenerates the remaining
+phase, domination and degree closure and compares the complete report. Recurrence inputs reuse
 `recurrence::rational_generating_function`, including every supplied seed.
 Zero prefixes and polynomial parts of recurrence GFs can be removed by exact
 series shifting. `source_recurrence` retains the complete original record,
@@ -79,9 +80,9 @@ positive actual leading coefficient. The older parity upper-bound shortcut
 keeps its original phase argument; its vanishing top coefficient cannot
 supply generic exterior signs.
 
-`domination_cutoff` records this independent start when available; older
-certificates omit it and replay their original conservative supplier exactly,
-including enclosing theorem reports with moved seeds or rule normalization.
+`domination_cutoff` records this independent start. Older certificates
+that omit it are rejected explicitly and must be regenerated, including
+enclosing theorem reports with moved seeds or rule normalization.
 `cutoff` is the joint start after degree/phase closure,
 and `finite_rows` contains exactly the earlier local rows. They can differ
 when the eventual degree law starts later than domination. In the classical
@@ -95,14 +96,12 @@ charts, degree-zero rows allow both starts to be zero.
 protocol. A proved report retains its complete request, supplier evidence,
 finite prefix and optional original recurrence. Verification reconstructs
 and compares every field; editing a witness or its source is rejected.
-Certificates without `domination_cutoff` select the original conservative
-supplier. New suppliers record `Some(N)`, including the uniform fallback,
-so improvements to automatic discovery do not silently switch replay modes.
-Enclosing theorem reports preserve the same selection, normalization and
-moved seeds. Stored legacy and pointwise tiling fixtures test both modes.
+Certificates without `domination_cutoff` are rejected. Current suppliers
+record `Some(N)`, including the uniform fallback. Stored legacy fixtures are
+negative migration tests; current pointwise fixtures remain replay targets.
 
-The schema remains v1 because the wire layout and mathematical trust model
-are unchanged and the old conservative certificate reconstruction is retained.
+The schema remains v1 because its wire layout is unchanged; accepted proof
+certificates now require the previously optional domination bound.
 The schema is not an implementation commit: exact replay can reject stale
 evidence when an arithmetic algorithm or witness label changes. Retain the
 producing source version with archived reports. For migration, generate a
@@ -110,14 +109,14 @@ fresh report from the archived request and verify it; never bypass comparison
 or edit the old witnesses. In particular, newer supplied-pair ray reports
 whose pair-discriminant check was labelled as a full characteristic
 discriminant must be regenerated to obtain the corrected label. The stored
-legacy and pointwise fixtures are maintained replay compatibility targets.
+pointwise fixtures are maintained replay compatibility targets.
 An unsupported `not_proved` result records the current search outcome;
 its diagnostic and completeness are allowed to change as suppliers improve.
 The verifier still rejects any recorded result that differs from its current
 reconstruction. Prefix-shift failures produce source-bound `not_proved`
 reports with exit 0, while malformed input remains an error with exit 2.
 Order-two no-remainder requests reject supplied `uniform_constants` rather
-than ignoring them; the conservative replay of old certificates is retained.
+than ignoring them; legacy reports cannot bypass this rejection.
 
 - Order two: proper numerator, bounded pair interval with simple collisions
   at negative and positive eigenvalues. The remainder is zero. A real
@@ -421,3 +420,25 @@ The quartic proof and its two exact negative controls use the existing
 `full-tests` tier because elimination is costly in debug builds. Run their
 complete focused suite with
 `cargo test --release -p polytool --features full-tests --lib bkw::effective::tests`.
+
+## Stored-witness replay and remaining regeneration
+
+`EffectiveBkwReport::verify` directly checks the stored characteristic and
+pair/cofactor factorization in the branch quotient, every recorded sign
+resultant, rational sample/root enclosure, critical-root box and wall sign,
+nonnegative-cell coverage, and every finite-prefix row identity, degree and
+exact distinct-real-root count. These checks consume stored data; they do
+not call the sign-grid producer. Invalid intervals and zero spectral
+denominators are rejected before quotient arithmetic.
+
+The continuous branch selection, phase endpoint limits, amplitude lift,
+Newton degree/leading-sign closure,
+domination constants/cutoffs, source-recurrence prefix binding and descriptive
+fields still use current deterministic supplier regeneration and complete
+comparison. Those supplier-specific obligations do not yet expose a standalone
+proof-object interface; separating them requires further certificate protocol
+work. Thus this is a partially independent checker, and replay cost can
+still include the original supplier search. A supplier bug in these remaining
+obligations is not excluded by replay. Stored proofs missing
+`domination_cutoff` are rejected explicitly; regenerate them from their request
+with the current API or CLI. Omitting the field never enables older guards.

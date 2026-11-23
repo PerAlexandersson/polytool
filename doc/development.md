@@ -112,8 +112,9 @@ cargo test --release --test integration degree_forty_fibre_screen -- --ignored
 ```
 Integration tests are modules of one `tests/integration/main.rs` binary;
 `cargo test -p polytool --test integration module_name::` selects one module.
-Worker checkouts reuse an external `CARGO_TARGET_DIR` and serialize builds
-with their build lock, including final checks.
+Use an external `CARGO_TARGET_DIR` to keep generated artifacts outside the
+source checkout. Avoid concurrent builds from different source checkouts in
+the same target directory.
 
 The dense rational solver and its independent differential tests live in
 `exact-algebra`. Run its tests, including the optional fallback hook, explicitly:
@@ -394,3 +395,22 @@ The tracked programs in `examples/` are run with
   a weighted renewal recurrence.
 
 See also [web.md](web.md) for the web wrapper and its build.
+
+## RealRooted citation inventory
+
+Run `python3 scripts/realrooted-declarations.py --check` for the offline gate,
+and `python3 scripts/realrooted-declarations.py --self-test` for negative controls.
+The fixture records actual declarations, namespaces or modules from an
+independent source declaration index at the commit in its header. To refresh:
+
+```sh
+python3 "$REALROOTED_ROOT/scripts/agent_index.py" --repo "$REALROOTED_ROOT" \
+  --output /tmp/realrooted-index.json
+python3 scripts/realrooted-declarations.py --inventory /tmp/realrooted-index.json
+python3 scripts/realrooted-declarations.py --check --inventory /tmp/realrooted-index.json
+```
+
+Use a clean upstream checkout at the intended revision. Regeneration without
+an independent inventory is refused; matching a Rust spelling alone cannot
+establish a Lean declaration. This checks names only, not theorem statements,
+proof compilation or axioms.

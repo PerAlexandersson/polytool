@@ -173,13 +173,11 @@
   degree-40 fibre screen even with `full-tests`. For the complete
   discovery fingerprint gate use `cargo test -p polytool --release --test
   integration discovery_fingerprints::every_ -- --ignored` without blessing.
-- Worker checkouts share one external `CARGO_TARGET_DIR`, with builds
-  serialized by the build lock. Use the enclosing workspace's documented
-  target location; do not create a fresh cache for each lane. Standalone web
-  and MCP scripts default to `${XDG_CACHE_HOME:-$HOME/.cache}/polytool/target`;
+- Use an external `CARGO_TARGET_DIR` for generated build output. Standalone
+  web and MCP scripts default to `${XDG_CACHE_HOME:-$HOME/.cache}/polytool/target`;
   configure `CARGO_TARGET_DIR`, `POLYTOOL_WASM_DIR` or installer `--build-dir`
-  to choose another external destination. Run final
-  verification under that lock to avoid linking another checkout's artifacts.
+  to choose another external destination. Avoid concurrent builds from different
+  source checkouts in the same target directory.
 - Run focused library and CLI tests before broader checks. Include
   `cargo test --manifest-path crates/exact-algebra/Cargo.toml --features test-hooks`
   when changing the shared exact kernels.

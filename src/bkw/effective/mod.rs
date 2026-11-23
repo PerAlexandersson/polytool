@@ -21,6 +21,7 @@ mod higher;
 mod pointwise;
 mod quadratic;
 mod quartic_ray;
+mod replay;
 mod signs;
 #[cfg(test)]
 mod tests;
@@ -354,22 +355,21 @@ pub struct EffectiveBkwPrefixRow {
 }
 
 impl EffectiveBkwReport {
-    /// Replay the exact computation, rejecting any modified input or witness.
+    /// Check stored factorization, sign resultants, samples, boxes and finite rows.
+    /// Phase endpoints, domination and Newton closure additionally regenerate
+    /// the current supplier and compare the complete report. Legacy proofs
+    /// without `domination_cutoff` are rejected and must be regenerated.
     ///
     /// # Errors
     /// Returns [`RecurrenceError::VerificationFailed`] on any mismatch.
     pub fn verify(&self) -> Result<(), RecurrenceError> {
-        // Reports predating the pointwise supplier retain their exact
-        // original arithmetic route. The absent optional field selects only
-        // this conservative replay, never a relaxed comparison of witnesses.
-        let legacy = self
-            .certificate
-            .as_ref()
-            .is_some_and(|c| c.domination_cutoff.is_none());
+        replay::witnesses(self)?;
+        // Phase endpoints, domination inequalities and Newton closure still
+        // use deterministic supplier regeneration, always with current guards.
         let expected = if let Some(source) = &self.source_recurrence {
-            certify_recurrence_with_mode(source, legacy)?
+            certify_effective_bkw_recurrence(source)?
         } else {
-            certify_with_mode(&self.request, legacy)?
+            certify_effective_bkw(&self.request)?
         };
         if self != &expected {
             return Err(RecurrenceError::VerificationFailed(
@@ -494,7 +494,7 @@ fn certify_recurrence_from_gf(
     if !skipped.is_empty() {
         report.source_recurrence = Some(record.clone());
         report.skipped_prefix = skipped;
-        if report.status == "proved" {
+        if report.certificate.is_some() {
             report.reason = format!("every row from index {} is nonzero and has only simple real zeros; removed prefix checked exactly and bound to the original recurrence", report.request.generating_function.first_index);
         }
     }

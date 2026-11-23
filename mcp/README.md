@@ -40,12 +40,13 @@ The server is intentionally small:
 
 `polytool-mcp --version` prints `polytool-mcp 0.8.0 (git <12-hex-commit>)`.
 The MCP initialization response uses the same version and commit in
-`serverInfo.version`. Both reuse the library's build-time Git metadata;
+`serverInfo.version`. Both reuse the library's build-time Git metadata (the last commit affecting
+the Polytool subtree, or the repository commit in a standalone checkout);
 source archives without Git metadata build normally and show `git unknown`.
 The existing `POLYTOOL_GIT_COMMIT` build override also applies to the MCP server.
 
 From the source checkout, compare the installed binary with its package
-version and current HEAD:
+version and the last commit affecting the Polytool subtree:
 
 ```sh
 ./mcp/check-installed.sh
@@ -371,6 +372,57 @@ as a tool result with `isError: true` and a `failed to deserialize parameters:
 ...` text block, so that clients can show them to the model.
 
 ## Tools
+
+### Implicit relations and equivalent representations
+
+| Tool | Input and result |
+| --- | --- |
+| `assess_generating_description` | Structured `description` with seeds and defining relations; assesses all-index uniqueness and remaining obligations. A finite fit alone is not a generating description. |
+| `transform_recurrence_implicit` | Structured `request` for an exact diagonal coefficient map or derivative antecedent; returns `polytool.recurrence-implicit.v1` with transported relations and reconstruction evidence. |
+| `verify_recurrence_implicit` | Saved `report` from the implicit transform; rechecks the recorded algebra and reconstruction. |
+| `search_implicit_relations` | Structured `request` with source rows/rule and bounded operator shapes; returns `polytool.recurrence-implicit-search.v1`, including exact relation and completeness evidence where available. |
+| `verify_implicit_relation_search` | Saved implicit-search `report`; replays the search and embedded certificates. |
+| `search_recurrence_representations` | Structured `request` with `source_recurrence`, `oeis_id`, or finite `rows`, transformation list and `limits`; bounded queue search returns ranked scalar/vector descriptions, edges and explicit budget events in `polytool.recurrence-representation-search.v1`. |
+| `verify_recurrence_representation_search` | Saved representation-search `report`; regenerates the search, replays each transform and complete-space certificate, and reconstructs source rows. |
+
+The structured requests follow the library schemas, documented in the
+[implicit transform guide](../doc/cli-recurrence-transforms.md) and
+[representation search guide](../doc/cli-recurrence-representations.md).
+Each replay tool returns `verified: true` only after its checks pass; a
+verified finite fit retains its finite scope.
+
+### Catalog generation and network certificates
+
+- `generate_oeis_rows`: `{"id":"A008292","rows":8}` generates exact
+  coefficient strings, with native indices. Optional `first_row` selects
+  the native starting row; at most 200 rows. Experimental records require
+  `include_experimental: true`.
+- `recognize_pf_network`: polynomial rows (`text` or `polynomials`) and
+  bounded step/search options; searches height-invariant planar networks.
+  A verified network gives PF/real-rooted nonpositive rows for the supplied
+  prefix. An exhausted search is inconclusive; it does not refute PF.
+- `check_left_production_matrix`: polynomial rows starting with degree zero
+  or one; at most 32 rows. Computes the exact left production block and
+  checks TNN, regenerated rows and Toeplitz windows. A successful certificate
+  proves PF rows for this finite triangle; a failure rejects this sufficient
+  criterion only. The response includes a network or a failure witness.
+
+### CLI and library scope
+
+MCP exposes a bounded selection of library operations; complete CLI parity is
+not a policy. Direct `bkw effective` GF/factorization requests and
+`bkw effective --verify` remain CLI/library operations: their elimination and
+supplier searches do not yet have a dedicated MCP request budget contract.
+`discover_recurrence_proofs` can still use the effective-BKW route on a
+recurrence, and its recorded route can be replayed through
+`verify_recurrence_proofs`.
+
+`stability verify` also remains CLI/library only. `stability_univariate`
+computes new certificates under MCP limits (degree 32, 256-bit rational parts,
+batch 512); it does not accept arbitrary saved certificates for replay.
+Use `polytool stability verify` or the exact-stability library verifier for
+that operation. `read_report` retrieves stored evidence without verifying it.
+
 
 ### `parse_polynomials`
 

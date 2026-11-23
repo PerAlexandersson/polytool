@@ -51,7 +51,8 @@ polytool 0.8.0 (git 0123456789ab)
 ```
 
 The version comes from the crate manifest and the lowercase 12-hex-digit Git
-commit is captured at build time.  If the source is built without trustworthy
+commit is captured at build time from the last commit affecting the Polytool
+subtree (the repository commit in a standalone checkout).  If the source is built without trustworthy
 Git metadata, the suffix is `(git unavailable)` rather than a fabricated
 revision.  Reproducible packaging environments may set `POLYTOOL_GIT_COMMIT`
 to a full or at least 12-digit hexadecimal revision; an empty or malformed
@@ -74,11 +75,14 @@ From GitHub, depend on the repository's standalone `main` branch:
 polytool = { git = "https://github.com/PerAlexandersson/polytool.git" }
 ```
 
+Crates.io publication is currently held: the bundled `exact-algebra` package
+is not published, and path-only sibling dependency metadata must be prepared
+before publishing this package graph. Git and local builds include those crates.
 After publishing to crates.io, the dependency would be:
 
 ```toml
 [dependencies]
-polytool = "0.6"
+polytool = "0.8"
 ```
 
 The public API is re-exported from `polytool`, so a downstream crate

@@ -109,23 +109,79 @@ pub(in crate::recurrence) fn pencil(
     if aa.is_positive() || d0.is_positive() || d2.is_positive() {
         return None;
     }
-    let two = Q::from_integer(2.into());
-    let four = Q::from_integer(4.into());
-    let q2 = vec![vec![-&aa, -&kk / &two], vec![-&kk / &two, -&cc]];
-    let cross = (&four * &aa * &cc + &four * &d2 * &d0 - (&kk + &d1) * (&kk + &d1)) / &two;
-    let q3 = vec![
-        vec![&four * &aa * &d0, -&two * &aa * &d1, cross.clone()],
-        vec![-&two * &aa * &d1, &four * &aa * &d2, &two * &d2 * &kk],
-        vec![cross, &two * &d2 * &kk, &four * &d2 * &cc],
-    ];
+    let [q2, q3] = pencil_forms(
+        &[
+            aa.clone(),
+            cc.clone(),
+            kk.clone(),
+            d0.clone(),
+            d1.clone(),
+            d2.clone(),
+        ]
+        .map(|v| vec![v]),
+    );
+    let constant_matrix = |m: Vec<Vec<Vec<Q>>>| {
+        m.into_iter()
+            .map(|row| {
+                row.into_iter()
+                    .map(|p| p.first().cloned().unwrap_or_default())
+                    .collect()
+            })
+            .collect()
+    };
     Some(MatrixOrbitPencilCheck {
         rows,
         columns,
         zero_side: false,
         wronskian_parameters: strings(&[aa, cc, kk, d0, d1, d2]),
-        copositivity: vec![copositivity(q2)?, copositivity(q3)?],
+        copositivity: vec![
+            copositivity(constant_matrix(q2))?,
+            copositivity(constant_matrix(q3))?,
+        ],
     })
 }
+// One formula over Q[t], also used for constant Q pencils. Parameters are
+// aa, cc, kk, d0, d1, d2 in the Wronskian discriminant reduction.
+pub(in crate::recurrence) fn pencil_forms(parameters: &[Vec<Q>; 6]) -> [Vec<Vec<Vec<Q>>>; 2] {
+    use crate::vec_poly as vp;
+    let [aa, cc, kk, d0, d1, d2] = parameters;
+    let scaled = |p: &[Q], n: i64, d: i64| vp::scale(p, &Q::new(n.into(), d.into()));
+    let q2 = vec![
+        vec![vp::neg(aa), scaled(kk, -1, 2)],
+        vec![scaled(kk, -1, 2), vp::neg(cc)],
+    ];
+    let kd = vp::add(kk, d1);
+    let cross = scaled(
+        &vp::sub(
+            &vp::add(
+                &scaled(&vp::mul(aa, cc), 4, 1),
+                &scaled(&vp::mul(d2, d0), 4, 1),
+            ),
+            &vp::mul(&kd, &kd),
+        ),
+        1,
+        2,
+    );
+    let q3 = vec![
+        vec![
+            scaled(&vp::mul(aa, d0), 4, 1),
+            scaled(&vp::mul(aa, d1), -2, 1),
+            cross.clone(),
+        ],
+        vec![
+            scaled(&vp::mul(aa, d1), -2, 1),
+            scaled(&vp::mul(aa, d2), 4, 1),
+            scaled(&vp::mul(d2, kk), 2, 1),
+        ],
+        vec![
+            cross,
+            scaled(&vp::mul(d2, kk), 2, 1),
+            scaled(&vp::mul(d2, cc), 4, 1),
+        ],
+    ];
+    [q2, q3]
+}
+
 pub(super) fn certify(matrix: &Matrix) -> Option<Vec<MatrixOrbitPencilCheck>> {
     if matrix
         .iter()

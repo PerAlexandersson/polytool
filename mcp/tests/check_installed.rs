@@ -110,3 +110,23 @@ fn checks_version_and_commit_and_rejects_unverifiable_builds() {
         .unwrap()
         .contains("unknown"));
 }
+
+#[test]
+fn unrelated_repository_head_does_not_make_subtree_build_stale() {
+    let fixture = Fixture::new();
+    fixture.executable(
+        "git",
+        r#"#!/bin/sh
+case "$*" in
+  *ls-files*) exit 0;;
+  *'log -1 --format=%H -- '*) printf '%s\n' abcdef0123456789;;
+  *) printf '%s\n' 9999999999999999;;
+esac
+"#,
+    );
+    fixture.binary_version(&format!(
+        "polytool-mcp {} (git abcdef012345)",
+        env!("CARGO_PKG_VERSION")
+    ));
+    assert!(fixture.check(true).status.success());
+}

@@ -323,6 +323,7 @@ macro_rules! define_parent_routes {
         /// The route that settled the parent statement.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
         #[serde(rename_all = "snake_case")]
+        #[non_exhaustive]
         pub enum VeroneseParentProofRoute {
             /// An index-independent periodic product with one-signed real-rooted seeds.
             PeriodicProduct,
@@ -337,6 +338,12 @@ macro_rules! define_parent_routes {
         }
 
         impl VeroneseParentProofRoute {
+            /// Every parent route, in its declaration order.
+            pub const ALL: [Self; [$first_name, $($name),*].len() + 4] = [
+                Self::PeriodicProduct, Self::$first, Self::PaperTheorem, Self::RootDomain,
+                $(Self::$variant,)* Self::Attestation,
+            ];
+
             /// The stable snake-case name used by Serde.
             pub const fn as_str(self) -> &'static str {
                 match self {

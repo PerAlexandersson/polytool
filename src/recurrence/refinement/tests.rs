@@ -391,3 +391,37 @@ fn four_coordinate_nonnegative_transition_can_break_real_rootedness() {
         "rejected"
     );
 }
+
+#[test]
+fn stored_transition_replay_does_not_rerun_a_successful_fit() {
+    let source = system(
+        vec![vec![Op::single(0, 0, Biv::new(vec![vec![q(1), q(1)]]))]],
+        vec![vec![q(1)]],
+        0,
+    );
+    let mut input = request(source);
+    input.candidates.push(InterlacingRefinementCandidate {
+        name: "fitted scalar".into(),
+        coordinates: None,
+        transition: None,
+        projection: vec![],
+    });
+    let mut report = discover_interlacing_refinements(&input).unwrap();
+    assert_eq!(report.status, "proved");
+    // This work cap cannot fit the transition, but checking the stored
+    // intertwiner needs no fit cells and still establishes the same theorem.
+    report.request.limits.maximum_fit_cells = 1;
+    assert_ne!(
+        discover_interlacing_refinements(&report.request)
+            .unwrap()
+            .status,
+        "proved"
+    );
+    verify_interlacing_refinements(&report).unwrap();
+    let mut bad = report.clone();
+    bad.candidates[0].degree_conditions = false;
+    assert!(verify_interlacing_refinements(&bad).is_err());
+    let mut bad = report;
+    bad.candidates[0].transition.as_mut().unwrap().matrix[0][0][0].coeffs[0][0] = "2".into();
+    assert!(verify_interlacing_refinements(&bad).is_err());
+}

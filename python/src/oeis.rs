@@ -56,7 +56,8 @@ fn oeis_ids(include_experimental: bool) -> Vec<&'static str> {
 /// ``first_index`` (the displayed OEIS row number of the first row; the CLI
 /// key is ``first_row``), ``flattened_offset``, ``bfile_available``,
 /// ``source_rows``, ``verification_rows``, ``rows_sha256``,
-/// ``real_rootedness`` (the catalog flag, or ``None``), ``evidence``
+/// ``real_rootedness`` (the catalog flag with optional ``audit`` evidence,
+/// or ``None``), ``evidence``
 /// (finite-segment evidence, or ``None``), ``recurrence`` (text) and
 /// ``recurrence_data`` (the ``polytool.recurrence.v1`` record; see
 /// :func:`recurrence`). Explicitly padded tables also include ``row_lengths``
@@ -86,6 +87,9 @@ fn oeis_info<'py>(py: Python<'py>, id: &str) -> PyResult<Bound<'py, PyDict>> {
             let value = PyDict::new(py);
             value.set_item("status", flag.status.as_str())?;
             value.set_item("as_of", flag.as_of)?;
+            if let Some(audit) = flag.audit {
+                value.set_item("audit", audit)?;
+            }
             dict.set_item("real_rootedness", value)?;
         }
         None => dict.set_item("real_rootedness", py.None())?,

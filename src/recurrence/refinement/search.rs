@@ -2,6 +2,22 @@
 use super::*;
 use preservation::{check_operator_preserver, directed};
 
+#[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum Verdict {
+    Proved,
+    NotProved,
+    FiniteFit,
+    Unresolved,
+    Rejected,
+    Exact,
+    Failed,
+}
+fn verdict(value: &str) -> Result<Verdict, RecurrenceError> {
+    serde_json::from_value(serde_json::Value::String(value.into()))
+        .map_err(|_| invalid(format!("unknown refinement verdict: {value}")))
+}
+
 fn validate(request: &InterlacingRefinementRequest) -> Result<(), RecurrenceError> {
     let l = &request.limits;
     if l.maximum_dimension == 0
@@ -228,7 +244,7 @@ fn check(
             })
     };
     let Some(matrix) = matrix else {
-        if !check.initial_invariant || check.target_recovery == "failed" {
+        if !check.initial_invariant || matches!(verdict(&check.target_recovery)?, Verdict::Failed) {
             check.status = "rejected".into();
         }
         check.reason = "no exact transfer found under the degree and work caps".into();
@@ -278,17 +294,33 @@ fn check(
                     .into();
         }
     }
-    let preserved = preservation.status == "proved";
-    let rejected = preservation.status == "rejected"
-        || check.identity == "failed"
-        || check.target_recovery == "failed"
-        || !check.initial_invariant;
-    check.reason=if rejected{"candidate fails an explicit algebraic, initial-order or preservation obligation"}else if preserved && check.identity=="exact" && check.target_recovery=="exact"{"exact intertwiner, scalar target recovery, ordered PF seed and all-index preservation; target is real-rooted or zero from the recorded first index"}else{"finite fitting, unresolved target identity or unresolved preservation remains; no infinite-family conclusion"}.into();
+    let preserved = matches!(verdict(&preservation.status)?, Verdict::Proved);
+    let exact = matches!(verdict(&check.identity)?, Verdict::Exact)
+        && matches!(verdict(&check.target_recovery)?, Verdict::Exact);
+    let rejected = matches!(verdict(&preservation.status)?, Verdict::Rejected)
+        || matches!(verdict(&check.identity)?, Verdict::Failed)
+        || matches!(verdict(&check.target_recovery)?, Verdict::Failed)
+        || !check.initial_invariant
+        || !check.degree_conditions;
+    check.reason = if rejected {
+        "candidate fails an explicit algebraic, initial-order or preservation obligation"
+    } else if preserved && exact {
+        concat!(
+            "exact intertwiner, scalar target recovery, ordered PF seed and all-index ",
+            "preservation; target is real-rooted or zero from the recorded first index"
+        )
+    } else {
+        concat!(
+            "finite fitting, unresolved target identity or unresolved preservation remains; ",
+            "no infinite-family conclusion"
+        )
+    }
+    .into();
     check.status = if rejected {
         "rejected"
-    } else if preserved && check.identity == "exact" && check.target_recovery == "exact" {
+    } else if preserved && exact {
         "proved"
-    } else if check.identity == "finite_fit" {
+    } else if matches!(verdict(&check.identity)?, Verdict::FiniteFit) {
         "finite_fit"
     } else {
         "unresolved"
@@ -378,54 +410,14 @@ fn scaled_template(
 pub(super) fn run_search(
     request: &InterlacingRefinementRequest,
 ) -> Result<InterlacingRefinementReport, RecurrenceError> {
-    validate(request)?;
-    let source = match (&request.source, &request.recurrence) {
-        (Some(s), _) => Some(s.clone()),
-        (_, Some(r)) => Some(companion(r, request.limits.maximum_dimension)?),
-        _ => None,
-    };
-    let (first, states) = if let Some(s) = &source {
-        let (_, _, seed) = decode_system(s)?;
-        (s.first_index, vec![seed])
-    } else {
-        let n = request.states[0].len();
-        if n == 0
-            || n > request.limits.maximum_dimension
-            || request
-                .states
-                .iter()
-                .any(|s| s.len() != n || s.iter().any(|p| p.len() > 65))
-        {
-            return Err(invalid(
-                "invalid finite state dimensions or polynomial degrees",
-            ));
-        }
-        (
-            request.first_index,
-            request
-                .states
-                .iter()
-                .map(|s| s.iter().map(|p| numbers(p)).collect())
-                .collect::<Result<Vec<_>, _>>()?,
-        )
-    };
-    if first > usize::MAX - 256 {
-        return Err(invalid("first index too large"));
-    }
+    let Context {
+        source,
+        first,
+        states,
+        weights,
+        targets,
+    } = prepare(request)?;
     let n = states[0].len();
-    if n > request.limits.maximum_dimension {
-        return Err(invalid("source dimension exceeds limits"));
-    }
-    let weights = if source.is_none() {
-        vec![Q::one(); n]
-    } else {
-        source_weights(request, n)?
-    };
-    let targets = request
-        .target_rows
-        .iter()
-        .map(|p| numbers(p))
-        .collect::<Result<Vec<_>, _>>()?;
     let mut candidates = request.candidates.clone();
     let mut scale = None;
     if request.derive_candidates {
@@ -512,10 +504,24 @@ pub(super) fn run_search(
             &request.limits,
         )?);
     }
-    let selected = checks
-        .iter()
-        .enumerate()
-        .filter(|(_, c)| c.status == "proved")
+    finish(request, first, checks, scale, capped)
+}
+
+fn finish(
+    request: &InterlacingRefinementRequest,
+    first: usize,
+    checks: Vec<InterlacingRefinementCheck>,
+    scale: Option<ScaledRefinementInterval>,
+    capped: bool,
+) -> Result<InterlacingRefinementReport, RecurrenceError> {
+    let mut proved = Vec::new();
+    for (i, check) in checks.iter().enumerate() {
+        if matches!(verdict(&check.status)?, Verdict::Proved) {
+            proved.push((i, check));
+        }
+    }
+    let selected = proved
+        .into_iter()
         .min_by_key(|(_, c)| {
             let m = c.transition.as_ref().unwrap();
             let nonzero = m
@@ -531,10 +537,145 @@ pub(super) fn run_search(
         .map(|(i, _)| i);
     let status = if selected.is_some() {
         "proved"
-    } else if checks.iter().any(|c| c.status == "finite_fit") {
+    } else if checks
+        .iter()
+        .map(|c| verdict(&c.status))
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
+        .any(|v| matches!(v, Verdict::FiniteFit))
+    {
         "finite_fit"
     } else {
         "not_proved"
     };
     Ok(InterlacingRefinementReport{schema:INTERLACING_REFINEMENT_SCHEMA.into(),request:request.clone(),status:status.into(),first_index:first,candidates:checks,selected,candidate_limit_reached:capped,scaled_interval:scale,reference:"Branden, arXiv:1410.6601, Theorem 8.5, zero-aware form with every weakly ordered row/column pair (RealRooted.PreservesInterlacingSeq0.iff_nonneg_and_2x2). A nonnegative scalar collapse is real-rooted or zero. Weyl Euler-lag transitions use a separate Euler/Rolle and common-interleaver argument.".into(),lean_replay:"not_attempted".into()})
+}
+
+struct Context {
+    source: Option<TransformVectorRecurrenceJson>,
+    first: usize,
+    states: Vec<Vec<Vec<Q>>>,
+    weights: Vec<Q>,
+    targets: Vec<Vec<Q>>,
+}
+fn prepare(request: &InterlacingRefinementRequest) -> Result<Context, RecurrenceError> {
+    validate(request)?;
+    let source = match (&request.source, &request.recurrence) {
+        (Some(s), _) => Some(s.clone()),
+        (_, Some(r)) => Some(companion(r, request.limits.maximum_dimension)?),
+        _ => None,
+    };
+    let (first, states) = if let Some(s) = &source {
+        let (_, _, seed) = decode_system(s)?;
+        (s.first_index, vec![seed])
+    } else {
+        let n = request.states[0].len();
+        if n == 0
+            || n > request.limits.maximum_dimension
+            || request
+                .states
+                .iter()
+                .any(|s| s.len() != n || s.iter().any(|p| p.len() > 65))
+        {
+            return Err(invalid(
+                "invalid finite state dimensions or polynomial degrees",
+            ));
+        }
+        (
+            request.first_index,
+            request
+                .states
+                .iter()
+                .map(|s| s.iter().map(|p| numbers(p)).collect())
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+    };
+    if first > usize::MAX - 256 {
+        return Err(invalid("first index too large"));
+    }
+    let n = states[0].len();
+    if n > request.limits.maximum_dimension {
+        return Err(invalid("source dimension exceeds limits"));
+    }
+    let weights = if source.is_none() {
+        vec![Q::one(); n]
+    } else {
+        source_weights(request, n)?
+    };
+    let targets = request
+        .target_rows
+        .iter()
+        .map(|p| numbers(p))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Context {
+        source,
+        first,
+        states,
+        weights,
+        targets,
+    })
+}
+
+/// Replay stored transitions as supplied witnesses: no proposal search or fitting
+/// is used for candidates that carry a transition. Failed fits are regenerated.
+pub(super) fn verify(report: &InterlacingRefinementReport) -> Result<(), RecurrenceError> {
+    let request = &report.request;
+    let Context {
+        source,
+        first,
+        states,
+        weights,
+        targets,
+    } = prepare(request)?;
+    if report.candidates.len() > request.limits.maximum_candidates {
+        return Err(invalid("too many recorded candidates"));
+    }
+    let mut checks = Vec::new();
+    for recorded in &report.candidates {
+        let mut witness = recorded.candidate.clone();
+        if recorded.transition.is_some() {
+            witness.transition = recorded.transition.clone();
+        }
+        let mut checked = check(
+            &witness,
+            source.as_ref(),
+            &states,
+            &targets,
+            &weights,
+            first,
+            &request.limits,
+        )?;
+        // The fitted transition is evidence; it need not have been supplied in
+        // the discovery request. Keep the original candidate's provenance.
+        checked.candidate = recorded.candidate.clone();
+        if checked != *recorded {
+            return Err(RecurrenceError::VerificationFailed(
+                "stored refinement transition, identity, seed or pencil failed".into(),
+            ));
+        }
+        checks.push(checked);
+    }
+    let scale = if request.derive_candidates {
+        source
+            .as_ref()
+            .map(scaled_template)
+            .transpose()?
+            .flatten()
+            .map(|(s, _)| s)
+    } else {
+        None
+    };
+    let expected = finish(
+        request,
+        first,
+        checks,
+        scale,
+        report.candidate_limit_reached,
+    )?;
+    if expected != *report {
+        return Err(RecurrenceError::VerificationFailed(
+            "refinement metadata mismatch".into(),
+        ));
+    }
+    Ok(())
 }

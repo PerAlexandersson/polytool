@@ -2,6 +2,58 @@
 
 ## 0.8.0 (unreleased)
 
+### Breaking changes
+
+- `RealRootednessTheorem`, `VeroneseParentProofRoute` and `RouteCertificate`
+  gained route/payload variants; `OeisCatalogError` gained row-length errors.
+  These enums are now `#[non_exhaustive]`; downstream matches need a wildcard arm. This source change requires a new minor release before 1.0.
+- `OeisSequenceDefinition::row_lengths` added a required field for Rust struct
+  literals. Optional `audit` evidence is now exposed by catalog attestation
+  structs; older JSON remains readable, but Rust literals need the field.
+- Strict older report readers using `deny_unknown_fields` reject newer optional
+  certificate fields (including lift interlacing transfers); update the reader
+  or regenerate reports with a matching version.
+- Effective-BKW certificates without `domination_cutoff` no longer replay;
+  regenerate from the embedded request with current checks.
+- The JSON h*-inequality family label `Hibi / tail-sum` is now
+  `Stapledon / tail-sum`; Hibi's inequality has its own family entry.
+
+- MCP `stability_univariate` caps degree at 32 and numerator/denominator bits
+  at 256. Cooperative time checks run within a single item. Summary mode
+  constructs no full JSON report and returns no stored report handle;
+  request `detail:full` to store and retrieve evidence.
+
+- MCP proof discovery now returns a compact library summary by default;
+  `detail: "full"` restores the unchanged complete report. Configure a report
+  directory to retain deterministic handles, inspect evidence with `read_report`
+  and replay with `verify_recurrence_proofs {report_id}`. Discovery accepts
+  `oeis_id` directly; exact BKW refutation remains opt-in with `refute: true`.
+- MCP catalog listings are paged (50 entries by default) and support query,
+  status, layout and field filters. Follow `next_offset` for later pages;
+  `fields: ["*"]` returns all metadata fields.
+- MCP `find_recurrence` and `get_oeis_sequence` omit generated code by default;
+  `include_code: true` restores it. `get_oeis_sequence` always includes the
+  complete `recurrence_json` record. CLI output and existing report schemas
+  are unchanged.
+
+### Review corrections
+
+- Catalog attestations for the eleven additions record the later external build
+  and standard-axiom audit. Optional evidence preserves older JSON records.
+- Refinement replay checks stored transitions without fitting; degree conditions
+  are explicit verdict obligations. Effective-BKW replay directly checks stored
+  spectral/sign/finite data; endpoint phase, domination and Newton closure still
+  regenerate current suppliers (see `doc/effective-bkw.md`).
+- Citation snapshots are checked against an independent declaration inventory
+  pinned to an upstream revision, with an offline gate. Catalog tests recompute
+  recorded term digests and validation rows; discovery fixtures retain verdicts
+  and proving routes beside report hashes.
+- MCP limits and descriptions agree, the README covers all registered tools,
+  and installed-build checks compare Polytool subtree commits. CLI-only effective
+  BKW and stability replay scope is documented in the MCP reference.
+- Compact pair certification separates chart, collision-phase and domination
+  steps; rational and symbolic affine pencils share one discriminant formula.
+
 ### Added
 
 - MCP initialization now provides a compact capability map covering every
@@ -20,82 +72,6 @@
 - Padded OEIS rows for A266178/A266298 and nine validated stretch families,
   bringing the bundled catalog to 930 entries.
 
-### Fixed
-
-- Standalone locked dependency builds (#64) and MCP family `parse_errors`
-  output (#65). Lift replay checks parent proofs independently; effective-BKW
-  replay, arithmetic overflow guards and stability parsing have been hardened.
-
-### Changed
-
-- Align the library/CLI, MCP, Python and web package versions at 0.8.0.
-- Exact simple-root checks over integers and rationals use the subresultant
-  square-free kernel to avoid rational gcd coefficient growth.
-
-
-## 0.7.0
-
-### Fixed
-
-- Refresh the standalone lockfile for the exact arithmetic dependencies and
-  check its full dependency graph before CI cache actions, then build-check
-  the library/CLI with `--locked` before unlocked CI commands.
-- Always emit MCP family `parse_errors`, including empty coefficient-list results.
-
-- OEIS tables can declare coordinate row lengths to retain positional
-  trailing zeros. A266178 and A266298 now generate their padded `2n+1`
-  rows, with supplied recurrences validated against 10,000 terms each.
-- Effective-BKW uniform certificates retain their supplier mode for exact
-  replay. Failed prefix shifts return source-bound `not_proved` reports;
-  phase periods and index arithmetic reject overflow, and order-two requests
-  reject unused uniform constants. Supplied-pair ray discriminant labels and
-  command help now describe the checks performed. Stored legacy and pointwise
-  reports guard replay, including rejection of changed evidence.
-- Higher-order algebraic pair proofs reuse exact denominator resultant norms
-  and use real-root barriers for constant numerators when
-  available. Full resultants and all critical-root exclusions are retained;
-  legacy arithmetic remains available for replay.
-
-- Standalone Hadamard-factor and preserver-image replay always checks the
-  recorded parent proof. Hadamard-factor replay derives its multiplier
-  justification from the factor. Forged claims are rejected even without an
-  interlacing transfer.
-- Stability parsing rejects lowercase `i`/`j` with a hint to use `I`. Stability
-  replay uses the schema contract independently of the producer package version.
-  Named regions are mapped exhaustively, and `exact-stability` participates in
-  public CI and the MSRV matrix.
-- `Polynomial<BigRational>::has_simple_roots` clears denominators and uses the
-  integer subresultant kernel; other fields retain their gcd backend.
-
-- Effective-BKW ray angles use complete cyclotomic divisibility tests on
-  rational squared trigonometric inputs. Binomial edge dilations use general
-  Bezout exponents; quotient denominators and local GF units are checked
-  explicitly, and identically zero cofactor coefficients admit zero Cauchy weights.
-
-- Keep legacy open basis-map parent requirements replayable when a new
-  parent route selects a stronger root bound; identities, transfers and
-  hypotheses are still recomputed exactly.
-
-- `family-check` and the simple-root helpers (`has_simple_roots`,
-  `has_simple_roots_bigint_coeffs`) use the integer subresultant square-free
-  degree instead of a rational Euclidean gcd, whose coefficients grow
-  exponentially: 40 rows of degree up to 40 drop from 70 s to 0.2 s, and
-  degree-60 families finish in seconds instead of timing out.
-- Correct four renamed RealRooted declarations used by basis-map routes and
-  guard cited declaration spellings with a standalone source inventory.
-- Attribute the Hessenberg Toeplitz circle criterion to Per Alexandersson and
-  sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741).
-
-- Fix replay of negative parity-product reports with zero seeds by checking
-  the intrinsic Casoratian identity before skipping a zero seed window.
-- `hstar-inequalities` no longer rejects valid h*-vectors such as `[1,6,1]` of the square
-  `[-1,1]^2`: the tail-sum inequality `h*_{d-1}+...+h*_{d-i} <= h*_2+...+h*_{i+1}` (Stapledon 2009,
-  eq. (6)) now uses its range `1 <= i <= floor(d/2)-1`, so it is empty for `d <= 3`. Hibi's inequality
-  `h*_d+...+h*_{d-i} <= h*_0+...+h*_{i+1}` (Hibi 1990) is checked as a separate family entry, and the
-  Hibi, Stanley and Stapledon references cite the original sources.
-
-### Added
-
 - Seeded half-step lag theorem recognition and replay (`half_step_lag`), including
   the associated Bell rows A059022/A059023 and the lag-two specializations.
 - Exact interlacing refinement discovery, supplied-coordinate checks, bounded
@@ -106,7 +82,7 @@
 - Nine stretch OEIS families: A056940, A140982, A142470, A155497, A155516,
   A155537, A202750, A278880 and A370232. Their supplied recurrences match
   every available local OEIS term and have exact all-index definition
-  bridges with source-audited upstream Lean attestations. The catalog now
+  bridges with externally build- and axiom-audited Lean attestations. The catalog now
   has 930 entries; the additions notes distinguish the 19 non-D-finite
   families and the remaining implicit-only A175124 relation.
 
@@ -196,6 +172,86 @@
   subsequences through the shared Newton-sum/Cayley--Hamilton kernel.
   This library operation asserts an all-index identity, not real-rootedness.
 
+### Fixed
+
+- Standalone locked dependency builds (#64) and MCP family `parse_errors`
+  output (#65). Lift replay checks parent proofs independently; effective-BKW
+  replay, arithmetic overflow guards and stability parsing have been hardened.
+
+- Refresh the standalone lockfile for the exact arithmetic dependencies and
+  check its full dependency graph before CI cache actions, then build-check
+  the library/CLI with `--locked` before unlocked CI commands.
+- Always emit MCP family `parse_errors`, including empty coefficient-list results.
+
+- OEIS tables can declare coordinate row lengths to retain positional
+  trailing zeros. A266178 and A266298 now generate their padded `2n+1`
+  rows, with supplied recurrences validated against 10,000 terms each.
+- Effective-BKW uniform certificates retain their supplier mode for exact
+  replay. Failed prefix shifts return source-bound `not_proved` reports;
+  phase periods and index arithmetic reject overflow, and order-two requests
+  reject unused uniform constants. Supplied-pair ray discriminant labels and
+  command help now describe the checks performed. Stored legacy and pointwise
+  reports guard replay, including rejection of changed evidence.
+- Higher-order algebraic pair proofs reuse exact denominator resultant norms
+  and use real-root barriers for constant numerators when
+  available. Full resultants and all critical-root exclusions are retained;
+  legacy certificates now require regeneration before replay.
+
+- Standalone Hadamard-factor and preserver-image replay always checks the
+  recorded parent proof. Hadamard-factor replay derives its multiplier
+  justification from the factor. Forged claims are rejected even without an
+  interlacing transfer.
+- Stability parsing rejects lowercase `i`/`j` with a hint to use `I`. Stability
+  replay uses the schema contract independently of the producer package version.
+  Named regions are mapped exhaustively, and `exact-stability` participates in
+  public CI and the MSRV matrix.
+- `Polynomial<BigRational>::has_simple_roots` clears denominators and uses the
+  integer subresultant kernel; other fields retain their gcd backend.
+
+- Effective-BKW ray angles use complete cyclotomic divisibility tests on
+  rational squared trigonometric inputs. Binomial edge dilations use general
+  Bezout exponents; quotient denominators and local GF units are checked
+  explicitly, and identically zero cofactor coefficients admit zero Cauchy weights.
+
+- Keep legacy open basis-map parent requirements replayable when a new
+  parent route selects a stronger root bound; identities, transfers and
+  hypotheses are still recomputed exactly.
+
+- `family-check` and the simple-root helpers (`has_simple_roots`,
+  `has_simple_roots_bigint_coeffs`) use the integer subresultant square-free
+  degree instead of a rational Euclidean gcd, whose coefficients grow
+  exponentially: 40 rows of degree up to 40 drop from 70 s to 0.2 s, and
+  degree-60 families finish in seconds instead of timing out.
+- Correct four renamed RealRooted declarations used by basis-map routes and
+  guard cited declaration spellings with a standalone source inventory.
+- Attribute the Hessenberg Toeplitz circle criterion to Per Alexandersson and
+  sqrt-of-2, building on Shapiro–Štampach (arXiv:1702.00741).
+
+- Fix replay of negative parity-product reports with zero seeds by checking
+  the intrinsic Casoratian identity before skipping a zero seed window.
+- `hstar-inequalities` no longer rejects valid h*-vectors such as `[1,6,1]` of the square
+  `[-1,1]^2`: the tail-sum inequality `h*_{d-1}+...+h*_{d-i} <= h*_2+...+h*_{i+1}` (Stapledon 2009,
+  eq. (6)) now uses its range `1 <= i <= floor(d/2)-1`, so it is empty for `d <= 3`. Hibi's inequality
+  `h*_d+...+h*_{d-i} <= h*_0+...+h*_{i+1}` (Hibi 1990) is checked as a separate family entry, and the
+  Hibi, Stanley and Stapledon references cite the original sources.
+
+### Changed
+
+- Align the library/CLI, MCP, Python and web package versions at 0.8.0.
+- Exact simple-root checks over integers and rationals use the subresultant
+  square-free kernel to avoid rational gcd coefficient growth.
+
+- The expensive BKW sparse-cubic, quartic-boundary and CLI replay regressions run with `full-tests`;
+  the MCP crate has its own `full-tests` feature. Small verdict, replay and stale-report checks stay in
+  the default tier.
+- Web bundles and MCP installer build output default to an external cache (`CARGO_TARGET_DIR`,
+  `POLYTOOL_WASM_DIR` or the installer's `--build-dir` choose another); the web script finds
+  `wasm-pack` on `PATH` or uses `WASM_PACK`.
+
+## 0.7.0
+
+### Added
+
 - `hypergeometric_row` recognizes terminating 3F2 rows after its existing
   multiplier matcher. Exact rational parameters, both upper-parameter parity
   assignments, argument scaling and degree reversal are checked. The weak
@@ -270,26 +326,6 @@
   empty. Replay rejects stale conditional reports; proof and refutation routes
   are unchanged. The `LIMIT_SPECTRUM_HYPOTHESIS` constant is removed.
 
-### Breaking
-
-- MCP `stability_univariate` caps degree at 32 and numerator/denominator bits
-  at 256. Cooperative time checks run within a single item. Summary mode
-  constructs no full JSON report and returns no stored report handle;
-  request `detail:full` to store and retrieve evidence.
-
-- MCP proof discovery now returns a compact library summary by default;
-  `detail: "full"` restores the unchanged complete report. Configure a report
-  directory to retain deterministic handles, inspect evidence with `read_report`
-  and replay with `verify_recurrence_proofs {report_id}`. Discovery accepts
-  `oeis_id` directly; exact BKW refutation remains opt-in with `refute: true`.
-- MCP catalog listings are paged (50 entries by default) and support query,
-  status, layout and field filters. Follow `next_offset` for later pages;
-  `fields: ["*"]` returns all metadata fields.
-- MCP `find_recurrence` and `get_oeis_sequence` omit generated code by default;
-  `include_code: true` restores it. `get_oeis_sequence` always includes the
-  complete `recurrence_json` record. CLI output and existing report schemas
-  are unchanged.
-
 ### Changed
 
 - Toeplitz circle certificates record their formal references in
@@ -342,12 +378,7 @@
   MCP search/family `latex` now contains the complete normalized presentation,
   including initial rows and range, instead of only a bare formula. Recurrence
   help and frozen search outputs change accordingly.
-- The expensive BKW sparse-cubic, quartic-boundary and CLI replay regressions run with `full-tests`;
-  the MCP crate has its own `full-tests` feature. Small verdict, replay and stale-report checks stay in
-  the default tier.
-- Web bundles and MCP installer build output default to an external cache (`CARGO_TARGET_DIR`,
-  `POLYTOOL_WASM_DIR` or the installer's `--build-dir` choose another); the web script finds
-  `wasm-pack` on `PATH` or uses `WASM_PACK`.
+
 
 ### Added
 
@@ -2422,6 +2453,13 @@ real-rootedness or interlacing verdict changed):
 - `tests/integration/real_rootedness_differential.rs` compares every exact method against
   ground truth on about 84,000 cases (ignored by default; run with
   `--ignored`).
+
+## 0.6.0 (historical note)
+
+No separate 0.6.0 release section was recorded in this changelog. Earlier
+sources and documentation refer to that version; no release date or shipped
+change set is inferred here.
+
 
 ## 0.5.0
 

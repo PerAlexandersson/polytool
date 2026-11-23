@@ -201,8 +201,7 @@ the OEIS rows, not a proof for every row.
 
 ### Real-rootedness flags
 
-A record may carry the optional key `real_rootedness`, the last key of its
-line:
+A record may carry the optional key `real_rootedness`:
 
 ```json
 "real_rootedness":{"status":"lean_proved","as_of":"2026-10-03"}
@@ -210,11 +209,16 @@ line:
 
 | `status` | Meaning |
 | --- | --- |
-| `lean_proved` | Every row of the entry is zero or real-rooted, by a machine-checked Lean proof (only the axioms `propext`, `Classical.choice` and `Quot.sound`) of a definition whose rows equal the catalog rows for every index.  The equality is shown exactly for all `n`: after the index shift that aligns the rows, both recurrences have the same normal form (every coefficient divided by the common polynomial gcd, leader normalized), the catalog leader does not vanish on the computed rows, the Lean rule divides by no expression that vanishes, and the rows agree exactly up to the index from which both rules apply.  Leading catalog rows before the Lean definition's first row (at most three) were checked exactly instead. |
+| `lean_proved` | Every row is zero or real-rooted by a machine-checked external Lean proof using only `propext`, `Classical.choice` and `Quot.sound`. An exact all-index definition bridge identifies the catalog rows with the formalized rows (for example, recurrence normalization or a factorial-ratio identity); any earlier prefix is checked exactly. |
 | `known_not_real_rooted` | Some row has a non-real root (an exact check of a generated row). |
 | absent | Unknown. |
 
 `as_of` (optional, `YYYY-MM-DD`) dates the proof-status snapshot or the check.
+An optional `audit` string records public evidence for an external build and
+axiom audit; it is omitted from older records. The eleven November additions
+record an external formalization corpus audited 2026-11-23 with standard
+axioms and a successful downstream build (stretch scope 157/157). This evidence
+supports the attestation; Polytool does not bundle or rebuild the corpus.
 The flag is not a polytool proof: `oeis info` prints it as a recorded flag, the
 JSON of `oeis info` and `oeis list --json` reports it as `real_rootedness`
 (`null` when unknown), and the Veronese parent provers use a `lean_proved`

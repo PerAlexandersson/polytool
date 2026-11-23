@@ -1047,7 +1047,7 @@ fn quartic_fractional_ray_with_two_fixed_real_modes() {
 }
 
 #[test]
-fn legacy_uniform_and_single_mode_reports_replay_exactly() {
+fn legacy_uniform_and_single_mode_reports_require_regeneration() {
     for input in [
         chebyshev(),
         tiling(),
@@ -1061,7 +1061,12 @@ fn legacy_uniform_and_single_mode_reports_replay_exactly() {
             .unwrap()
             .domination_cutoff
             .is_none());
-        report.verify().unwrap();
+        assert!(report
+            .verify()
+            .unwrap_err()
+            .to_string()
+            .contains("legacy certificate"));
+        certify_effective_bkw(&input).unwrap().verify().unwrap();
         let mut bad = report;
         bad.certificate.as_mut().unwrap().cutoff += 1;
         assert!(bad.verify().is_err());
@@ -1161,4 +1166,32 @@ fn five_mode_zero_edge_obstructs_global_pair_domination() {
         .reason
         .contains("excluding global pair domination near t=0"));
     report.verify().unwrap();
+}
+
+#[test]
+fn direct_witness_checker_consumes_samples_and_factorization() {
+    let report = certify_effective_bkw(&chebyshev()).unwrap();
+    replay::witnesses(&report).unwrap();
+    let mut alternative = report.clone();
+    // A different exact sample of the same strict discriminant sign is valid
+    // evidence even though deterministic producer comparison would reject it.
+    alternative.certificate.as_mut().unwrap().signs[0].sample_parameter = "1/2".into();
+    replay::witnesses(&alternative).unwrap();
+    alternative.certificate.as_mut().unwrap().signs[0].sample_parameter = "2".into();
+    assert!(replay::witnesses(&alternative).is_err());
+    let mut bad = report.clone();
+    bad.certificate
+        .as_mut()
+        .unwrap()
+        .expansion_data
+        .pair_norm_squared
+        .numerator = vec![vec!["2".into()]];
+    assert!(replay::witnesses(&bad).is_err());
+    let mut bad = report;
+    bad.certificate.as_mut().unwrap().domination_cutoff = None;
+    assert!(bad
+        .verify()
+        .unwrap_err()
+        .to_string()
+        .contains("legacy certificate"));
 }

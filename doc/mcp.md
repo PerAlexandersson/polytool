@@ -314,3 +314,11 @@ encoding, proof obligations and finite-evidence statuses.
 
 `check_polynomial_family` always emits `parse_errors`, including `[]` for
 coefficient-list input with no parse failures.
+
+The authoritative tool reference is [mcp/README.md](../mcp/README.md), with
+coverage checked against `tools/list`. It also documents the CLI-only
+`bkw effective` request/replay and `stability verify` exceptions.
+
+Additional registered tools include `bicyclic_sieving`, `exact_root_enclosures`,
+`find_recurrence_spaces`, `recurrence_theorems` and `verify_recurrence_spaces`;
+see that reference for their request shapes, limits and proof scope.

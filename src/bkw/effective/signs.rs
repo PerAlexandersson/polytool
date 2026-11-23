@@ -378,7 +378,7 @@ impl Domain {
             sample,
         })
     }
-    fn location(&self, p: &P, r: &mut I, epsilon: &Q) -> Result<i8, RecurrenceError> {
+    pub(super) fn location(&self, p: &P, r: &mut I, epsilon: &Q) -> Result<i8, RecurrenceError> {
         // -1 outside, 0 exactly an endpoint, 1 strictly inside. Refine until
         // ordered, or certify equality through a common polynomial root.
         let mut ds = self.clone();
