@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.8.0 (unreleased)
+## 0.9.0 — 2026-11-24
+
+First release after 0.7.0. The development version 0.8.0 was never tagged; its changes are listed here.
 
 ### Catalog
 

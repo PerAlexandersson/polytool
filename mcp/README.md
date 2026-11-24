@@ -38,7 +38,7 @@ The server is intentionally small:
 
 ## Build identity and installed-binary check
 
-`polytool-mcp --version` prints `polytool-mcp 0.8.0 (git <12-hex-commit>)`.
+`polytool-mcp --version` prints `polytool-mcp 0.9.0 (git <12-hex-commit>)`.
 The MCP initialization response uses the same version and commit in
 `serverInfo.version`. Both reuse the library's build-time Git metadata (the last commit affecting
 the Polytool subtree, or the repository commit in a standalone checkout);
