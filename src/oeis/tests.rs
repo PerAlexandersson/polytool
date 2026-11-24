@@ -442,6 +442,7 @@ fn bundled_real_rootedness_flags_are_exposed() {
     };
     assert_eq!(count(OeisRealRootednessStatus::LeanProved), 814);
     assert_eq!(count(OeisRealRootednessStatus::KnownNotRealRooted), 1);
+    assert_eq!(count(OeisRealRootednessStatus::TheoremProved), 5);
     for (entry, flag) in &flagged {
         assert_eq!(entry.real_rootedness(), Some(*flag));
     }
@@ -463,6 +464,106 @@ fn bundled_real_rootedness_flags_are_exposed() {
 
 fn row(coefficients: &[i64]) -> Vec<BigInt> {
     coefficients.iter().copied().map(BigInt::from).collect()
+}
+
+#[test]
+fn structural_theorem_attestations_round_trip_with_public_sources() {
+    let records = OeisCatalogRecord::parse_jsonl(&catalog_data_text()).unwrap();
+    for (id, source) in [
+        ("A035469", "https://arxiv.org/abs/0803.1659v1"),
+        ("A049029", "https://arxiv.org/abs/0803.1659v1"),
+        ("A089503", "https://arxiv.org/abs/0803.1659v1"),
+        ("A143494", "poissonPolynomial_isPFPolynomial"),
+        ("A143495", "poissonPolynomial_isPFPolynomial"),
+    ] {
+        let record = records.iter().find(|r| r.id == id).unwrap();
+        let flag = record.real_rootedness.as_ref().unwrap();
+        assert_eq!(flag.status, OeisRealRootednessStatus::TheoremProved, "{id}");
+        assert_eq!(flag.status.as_str(), "theorem_proved");
+        assert_eq!(flag.as_of.as_deref(), Some("2026-11-24"));
+        let audit = flag.audit.as_deref().unwrap();
+        assert!(audit.contains(source), "{id}");
+        assert!(!audit.contains("/workspace/"));
+        assert!(!audit.contains("/cargo-target/"));
+        assert_eq!(
+            by_id(id).unwrap().real_rootedness().unwrap().audit,
+            Some(audit)
+        );
+        assert_eq!(
+            OeisCatalogRecord::parse_jsonl(&record.to_jsonl_line()).unwrap(),
+            vec![record.clone()]
+        );
+    }
+}
+
+#[test]
+fn structural_rook_attestations_match_catalog_rows_through_degree_40() {
+    // Test-local board evaluator: Polytool remains standalone, so its tests
+    // cannot depend on the workspace's foundational combinatorics crate.
+    // In increasing column order, every previously occupied row is present
+    // in the new column. Placing its rook leaves height-(k-1) choices.
+    fn rook_numbers(columns: &[usize]) -> Vec<BigInt> {
+        let mut numbers = vec![BigInt::from(1)];
+        for &height in columns {
+            let mut next = numbers.clone();
+            next.push(BigInt::from(0));
+            for (k, count) in numbers.iter().enumerate() {
+                next[k + 1] += count * BigInt::from(height - k);
+            }
+            numbers = next;
+        }
+        numbers
+    }
+
+    for (id, step) in [("A035469", 4), ("A049029", 5), ("A089503", 0)] {
+        let entry = by_id(id).unwrap();
+        assert_eq!(entry.first_row, 1);
+        let rows = entry.generate_rows(41).unwrap();
+        for (m, actual) in rows.iter().enumerate() {
+            let n = m + 1;
+            let columns: Vec<_> = if step == 0 {
+                vec![2 * n; n - 1]
+            } else {
+                (1..=n - 1).map(|j| step * j).collect()
+            };
+            let mut expected = rook_numbers(&columns);
+            if step == 0 {
+                // Independently check the rectangle formula as well.
+                let mut falling = BigInt::from(1);
+                for (k, coefficient) in expected.iter().enumerate() {
+                    assert_eq!(
+                        *coefficient,
+                        crate::numeric::binomial_bigint(n - 1, k) * &falling
+                    );
+                    falling *= BigInt::from(2 * n - k);
+                }
+            } else {
+                expected.reverse();
+            }
+            assert_eq!(*actual, expected, "{id}, displayed n={n}");
+        }
+    }
+}
+
+#[test]
+fn structural_poisson_attestations_match_catalog_rows_through_degree_40() {
+    for (id, offset) in [("A143494", 2), ("A143495", 3)] {
+        let entry = by_id(id).unwrap();
+        assert_eq!(entry.first_row, offset as i64);
+        let rows = entry.generate_rows(41).unwrap();
+        let mut expected = vec![BigInt::from(1)];
+        for (m, actual) in rows.iter().enumerate() {
+            assert_eq!(*actual, expected, "{id}, displayed n={}", m + offset);
+            // Poisson step (t+a)Q+tQ': [t^k] becomes
+            // (a+k)[t^k]Q + [t^(k-1)]Q, starting from the empty product 1.
+            let mut next = vec![BigInt::from(0); expected.len() + 1];
+            for (k, coefficient) in expected.iter().enumerate() {
+                next[k] += coefficient * BigInt::from(offset + k);
+                next[k + 1] += coefficient;
+            }
+            expected = next;
+        }
+    }
 }
 
 #[test]

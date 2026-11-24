@@ -134,6 +134,12 @@ pub enum OeisRealRootednessStatus {
     LeanProved,
     /// Some row has a non-real root (an exact counterexample row exists).
     KnownNotRealRooted,
+    /// Every row is zero or real-rooted by a cited theorem and an exact
+    /// all-index structural identification, recorded in the audit evidence.
+    /// This does not assert a Lean proof of the identification or a proof
+    /// certificate checked by polytool. Finite row agreement alone does not
+    /// justify this status.
+    TheoremProved,
 }
 
 impl OeisRealRootednessStatus {
@@ -142,6 +148,7 @@ impl OeisRealRootednessStatus {
         match self {
             Self::LeanProved => "lean_proved",
             Self::KnownNotRealRooted => "known_not_real_rooted",
+            Self::TheoremProved => "theorem_proved",
         }
     }
 }
@@ -155,7 +162,8 @@ pub struct OeisCatalogRealRootedness {
     /// Date (`YYYY-MM-DD`) of the proof snapshot or check the flag records.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub as_of: Option<String>,
-    /// Optional public audit evidence; absent in older records. This is an
+    /// Optional public audit evidence, including structural identifications
+    /// and theorem citations; absent in older records. This is an
     /// attestation, not a proof certificate checked by polytool.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audit: Option<String>,

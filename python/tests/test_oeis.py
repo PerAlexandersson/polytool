@@ -29,6 +29,25 @@ def test_generate_rows_as_listed():
     assert max(big) > 2**64
 
 
+@pytest.mark.parametrize(
+    "sequence,first_index,source",
+    [
+        ("A035469", 1, "0803.1659v1"),
+        ("A049029", 1, "0803.1659v1"),
+        ("A089503", 1, "0803.1659v1"),
+        ("A143494", 2, "poissonPolynomial_isPFPolynomial"),
+        ("A143495", 3, "poissonPolynomial_isPFPolynomial"),
+    ],
+)
+def test_structural_theorem_attestations(sequence, first_index, source):
+    info = oeis.info(sequence)
+    assert info["first_index"] == first_index
+    flag = info["real_rootedness"]
+    assert flag["status"] == "theorem_proved"
+    assert flag["as_of"] == "2026-11-24"
+    assert source in flag["audit"]
+
+
 def test_bundled_recurrence_matches_the_rows():
     for sequence in ["A008292", "A001263"]:
         recurrence = oeis.recurrence(sequence)

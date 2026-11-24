@@ -40,6 +40,10 @@
 //! proof made outside polytool; polytool never reports such a family as proved
 //! by itself, and the Veronese parent provers treat a parent that equals a
 //! flagged entry as conditional on the flag.
+//! [`OeisRealRootednessStatus::TheoremProved`] records a cited theorem with
+//! an exact all-index structural identification documented in the audit
+//! evidence, without asserting a Lean proof of that identification. The
+//! Veronese parent provers currently consume only `LeanProved` flags.
 //!
 //! Finite evidence: a record may also carry an [`OeisCatalogEvidence`], read
 //! with [`OeisSequenceDefinition::evidence`]: the strongest of real-rooted,

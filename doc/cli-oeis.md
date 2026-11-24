@@ -210,12 +210,14 @@ A record may carry the optional key `real_rootedness`:
 | `status` | Meaning |
 | --- | --- |
 | `lean_proved` | Every row is zero or real-rooted by a machine-checked external Lean proof using only `propext`, `Classical.choice` and `Quot.sound`. An exact all-index definition bridge identifies the catalog rows with the formalized rows (for example, recurrence normalization or a factorial-ratio identity); any earlier prefix is checked exactly. |
+| `theorem_proved` | Every row is zero or real-rooted by a cited theorem and a proved all-index structural identification, recorded in `audit`. This status does not assert a Lean proof of the identification. Finite row agreement alone is insufficient. |
 | `known_not_real_rooted` | Some row has a non-real root (an exact check of a generated row). |
 | absent | Unknown. |
 
 `as_of` (optional, `YYYY-MM-DD`) dates the proof-status snapshot or the check.
-An optional `audit` string records public evidence for an external build and
-axiom audit; it is omitted from older records. The eleven November additions
+An optional `audit` string records the structural identification and theorem
+source, or public evidence for an external build and axiom audit; it is omitted
+from older records. The eleven November additions
 record an external formalization corpus audited 2026-11-23 with standard
 axioms and a successful downstream build (stretch scope 157/157). This evidence
 supports the attestation; Polytool does not bundle or rebuild the corpus.
@@ -224,10 +226,18 @@ JSON of `oeis info` and `oeis list --json` reports it as `real_rootedness`
 (`null` when unknown), and the Veronese parent provers use a `lean_proved`
 entry only as an attestation (verdict `conditional_on_attestation`, label
 `oeis_catalog:<A-number>:lean_proved`), see the library documentation.  The
-bundled catalog flags 814 entries `lean_proved` and one (A122431, whose row
+bundled catalog flags 814 entries `lean_proved`, five `theorem_proved` (see the
+[structural identifications](oeis-catalog-additions-2026-11.md#structural-attestations-2026-11-24)),
+and one (A122431, whose row
 `3 + 3x + x^2` is not real-rooted) `known_not_real_rooted`.  A replaced entry
 (`oeis add --replace`) loses its flag, because the flag certifies the rows of
 the recurrence it was established for.
+
+`theorem_proved` adds an enum value without changing any existing fields or
+status meanings; older records remain readable. Strict older readers must
+accept this value before reading updated records, and exhaustive Rust matches
+on `OeisRealRootednessStatus` need a corresponding arm. The Veronese parent
+provers currently consume only `lean_proved` attestations.
 
 ### Evidence records
 

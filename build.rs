@@ -166,6 +166,7 @@ fn real_rootedness_variant(status: OeisRealRootednessStatus) -> &'static str {
     match status {
         OeisRealRootednessStatus::LeanProved => "LeanProved",
         OeisRealRootednessStatus::KnownNotRealRooted => "KnownNotRealRooted",
+        OeisRealRootednessStatus::TheoremProved => "TheoremProved",
     }
 }
 

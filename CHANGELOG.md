@@ -2,6 +2,18 @@
 
 ## 0.8.0 (unreleased)
 
+### Catalog
+
+- Add `theorem_proved` real-rootedness attestations for A035469, A049029,
+  A089503, A143494 and A143495, using all-index rook-board and Poisson-offset
+  identifications with cited theorems. Audit strings record the identities,
+  index shifts and theorem sources; these flags do not assert Lean proofs of
+  the identifications. Structural regressions compare exact rows through degree
+  40. Recurrences and row fingerprints are unchanged.
+- `OeisRealRootednessStatus::TheoremProved` serializes as `theorem_proved`.
+  Existing catalog records and status meanings remain supported; exhaustive
+  Rust matches and strict older JSON readers need to accept the added value.
+
 ### Breaking changes
 
 - `RealRootednessTheorem`, `VeroneseParentProofRoute` and `RouteCertificate`

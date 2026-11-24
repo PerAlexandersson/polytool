@@ -236,3 +236,87 @@ labels in failed attestation diagnostics. The older fingerprints also omitted
 labels for the already catalogued A266178 and A266298. Removing the nine
 stretch labels and these two padded-table labels recovers every older parent
 fingerprint exactly; statuses, routes and all other report fields are unchanged.
+
+## Structural attestations (2026-11-24)
+
+We record `theorem_proved` for the following five existing entries. Each
+attestation combines an all-index identity with a theorem for the identified
+structure; its `audit` string gives both ingredients. The catalog recurrences,
+seeds, recurrence provenance and row fingerprints are unchanged.
+
+| Entry | Displayed indices | Polynomial in catalog coordinates |
+| --- | --- | --- |
+| A035469 | `n>=1` | `t^(n-1) R_(n-1)(1/t)`, where `R_m` is the rook polynomial of columns `4,8,...,4m` |
+| A049029 | `n>=1` | The same reversal, with columns `5,10,...,5m` |
+| A089503 | `n>=1` | Rook polynomial of an `(n-1)`-column, `2n`-row rectangle |
+| A143494 | `n>=2` | Poisson-offset polynomial with `n-2` offsets equal to 2 |
+| A143495 | `n>=3` | Poisson-offset polynomial with `n-3` offsets equal to 3 |
+
+For the first two identities, let `R_m(t)` enumerate rook placements on
+columns `c,2c,...,cm`, with `c=4` or `c=5`. Adding the last column gives
+`r_(m,k)=r_(m-1,k)+(cm-k+1)r_(m-1,k-1)`: a placement of `k-1` rooks in
+the earlier columns occupies precisely `k-1` rows of the final column.
+Consequently,
+
+```text
+R_0=1, R_m=(1+cm t)R_(m-1)-t^2 R'_(m-1).
+Q_m(t)=t^m R_m(1/t),
+Q_0=1, Q_m=(t+(c-1)m+1)Q_(m-1)+t Q'_(m-1).
+```
+
+With `m=n-1`, this is exactly the catalog rule and seed. These catalog
+coordinates omit the initial factor of `t` in the OEIS enumerators. Each
+board admits `m` rooks, so its rook polynomial has degree `m`; its constant
+term is one. The displayed reversal therefore introduces no zero root.
+
+For A089503, choosing the occupied columns and injecting them into the rows
+gives `r_(n,k)=binomial(n-1,k)*(2n)_falling_k`, for `0<=k<=n-1`. The catalog
+rule gives the coefficient identity
+
+```text
+r_(n,k)=r_(n-1,k)+(4n-k-3)r_(n-1,k-1)
+        +(n-1)(n-k)r_(n-1,k-2).
+```
+
+Substituting the formula reduces this identity, for `n>=2`, to
+
+```text
+(n-1)2n(2n-1)=(n-1-k)(2n-k)(2n-k-1)
+              +(4n-k-3)k(2n-k)+(n-1)k(k-1).
+```
+
+Expansion verifies it. At `k=0,1` the factors `k` and `k(k-1)` remove the
+out-of-range terms; above degree `n-1` both sides are zero (at `k=n` the
+remaining multiplier is `n-k=0`). Together with `P_1=1`, this proves the
+identity at every displayed index.
+
+Rooks on any finite board are matchings of its row-column bipartite graph.
+We apply the Heilmann-Lieb matching theorem as stated by D. G. Wagner in
+[*Weighted enumeration of spanning subgraphs with degree constraints*,
+arXiv:0803.1659v1](https://arxiv.org/abs/0803.1659v1), Corollary 3.3(a) and
+Example 4.1. We take unit edge weights and vertex activities `u_0=u_1=1`,
+`u_k=0` for `k>=2`. The vertex key is `1+d z`, where `d` is its degree;
+with `alpha=0` the corollary places every root on the nonpositive real axis.
+Constant term one excludes zero. Reversing the first two families takes
+reciprocals of their negative roots, proving real-rootedness for all three
+rook families, including the constant first rows.
+
+For a fixed nonnegative offset `a`, the Poisson-offset definition gives
+`Q_0=1` and `Q_(m+1)=(t+a)Q_m+t Q'_m`. These are precisely the catalog
+seeds and rules for `(a,m)=(2,n-2)` and `(3,n-3)`. Induction proves both
+identifications. The external Lean theorem
+`RealRooted.DistinctValues.poissonPolynomial_isPFPolynomial`, in
+`DistinctValues/Poisson.lean` at source commit
+`28fa02e98eedb2e351ff7aa203cbf0f8181668f0`, proves that every list of
+nonnegative real offsets gives a PF polynomial, hence only nonpositive
+real roots. Both constant offset lists meet its hypothesis, including the
+empty lists at the first catalog rows.
+
+We use `theorem_proved` for all five entries: the identifications above are
+mathematical arguments, and no Lean proofs of these identifications are
+asserted. Related Rust: `src/oeis/tests.rs`,
+`structural_rook_attestations_match_catalog_rows_through_degree_40` and
+`structural_poisson_attestations_match_catalog_rows_through_degree_40`
+regenerate 41 exact rows per entry from the structures. These finite
+comparisons check the implementation and indexing separately from the
+all-index arguments.
