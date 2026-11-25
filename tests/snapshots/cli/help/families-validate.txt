@@ -1,0 +1,20 @@
+Validate all bundled sidecars, references and reproduced rows.
+
+
+
+Usage: polytool families validate [OPTIONS]
+
+Options:
+      --lean-export <FILE>  Optional public proof-owner JSON declaration list at pinned commits
+  -h, --help                Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Examples:
+  polytool families validate --json
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input

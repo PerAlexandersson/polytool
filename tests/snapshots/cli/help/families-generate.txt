@@ -1,0 +1,23 @@
+Generate the first complete exact coefficient rows.
+
+
+
+Usage: polytool families generate [OPTIONS] <ID>
+
+Arguments:
+  <ID>  A###### or PT-F####
+
+Options:
+      --count <N>  Number of complete rows, 1..512 [default: 8]
+  -h, --help       Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: rows] [possible values: rows, terms, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Examples:
+  polytool families generate PT-F0001 --count 9 --format rows
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input

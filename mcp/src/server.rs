@@ -105,6 +105,43 @@ impl PolynomialToolsServer {
         crate::exponential_rows::run(request).map(Json)
     }
 
+    #[tool(
+        description = "List curated OEIS and submission-bound families. Filter ID/title or proof status; pages 1..100, default 50. Statuses are external attestations or finite evidence, not proofs checked by this tool."
+    )]
+    pub fn list_families(
+        &self,
+        Parameters(input): Parameters<crate::ListFamiliesRequest>,
+    ) -> Result<Json<serde_json::Value>, McpError> {
+        crate::families::list(input).map(Json)
+    }
+    #[tool(
+        description = "Show one bundled family's curated metadata, canonical generator, proof references, public pinned Lean links and OEIS submission state."
+    )]
+    pub fn get_family(
+        &self,
+        Parameters(input): Parameters<crate::GetFamilyRequest>,
+    ) -> Result<Json<serde_json::Value>, McpError> {
+        crate::families::show(input).map(Json)
+    }
+    #[tool(
+        description = "Generate exact integer coefficient rows for one bundled family. Count 1..64, default 8; ascending powers, starting at first_row. Response at most 1 MiB. No proof claim."
+    )]
+    pub fn generate_family_rows(
+        &self,
+        Parameters(input): Parameters<crate::GenerateFamilyRowsRequest>,
+    ) -> Result<Json<serde_json::Value>, McpError> {
+        crate::families::generate(input).map(Json)
+    }
+    #[tool(
+        description = "Export one bundled family as copyable OEIS draft blocks, oeis-contributions TOML skeleton and b-file text. Count 1..64, default 12; output <=1 MiB. No writes or submissions. Review placeholders before use."
+    )]
+    pub fn export_family_oeis(
+        &self,
+        Parameters(input): Parameters<crate::GenerateFamilyRowsRequest>,
+    ) -> Result<Json<serde_json::Value>, McpError> {
+        crate::families::export(input).map(Json)
+    }
+
     #[tool(description = "Parse and format one or more dense univariate polynomials.")]
     pub fn parse_polynomials(
         &self,
@@ -2054,6 +2091,7 @@ Sieving:
   cyclic_sieving, bicyclic_sieving, cyclic_sieving_sequence
 OEIS catalog & standard sequences:
   list_oeis_sequences, get_oeis_sequence, generate_oeis_rows, generate_sequence, generate_exponential_rows
+  list_families, get_family, generate_family_rows, export_family_oeis
 Reports & help:
   read_report, tool_help
 

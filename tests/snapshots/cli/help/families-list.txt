@@ -1,0 +1,21 @@
+List OEIS and submission-bound sequence families.
+
+
+
+Usage: polytool families list [OPTIONS]
+
+Options:
+      --query <TEXT>     Case-insensitive ID/title filter
+      --status <STATUS>  Real-rootedness status filter
+  -h, --help             Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Examples:
+  polytool families list --status theorem_proved --json
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input

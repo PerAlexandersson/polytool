@@ -1,0 +1,30 @@
+Curated sequence families, proof attestations and OEIS submission drafts.
+
+One overview of bundled OEIS families and curated submission-bound families.
+Canonical OEIS generators/statuses are inherited, with curated JSON metadata and
+non-OEIS exp-rows or recurrence generators. This catalog is separate from an
+automated discovery census.
+
+Usage: polytool families <COMMAND>
+
+Commands:
+  list         List OEIS and submission-bound sequence families.
+  show         Show complete curated metadata and canonical generator.
+  generate     Generate the first complete exact coefficient rows.
+  export-oeis  Print copyable OEIS draft blocks and a proposal TOML skeleton.
+  validate     Validate all bundled sidecars, references and reproduced rows.
+
+Options:
+  -h, --help  Print help
+
+Examples:
+  polytool families list --query packing
+  polytool families generate PT-F0001 --count 9
+  polytool families export-oeis PT-F0002 --json
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input
+
+See also:
+  polytool oeis, polytool exp-rows

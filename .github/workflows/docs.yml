@@ -38,6 +38,8 @@ jobs:
       - name: Check expected pages
         run: |
           for page in index.html README.html doc/command-reference.html api/polytool/index.html \
+                      families/index.html families/PT-F0001.html families/PT-F0002.html \
+                      families/catalog.json families/bfiles/PT-F0001.txt \
                       api/ore_algebra/index.html api/exact_real_roots/index.html \
                       api/exact_algebra/index.html; do
             test -f "$RUNNER_TEMP/polytool-docs/$page" || { echo "missing $page"; exit 1; }

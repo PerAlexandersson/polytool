@@ -1,0 +1,28 @@
+Print copyable OEIS draft blocks and a proposal TOML skeleton.
+
+Generate a conservative 240-byte data prefix in at most three 80-byte OEIS
+lines, plus a b-file bounded to 10,000 terms and 1 MiB. Review authors, search
+date, keywords and generator adapter in the proposal skeleton. This command does
+not submit anything.
+
+Usage: polytool families export-oeis [OPTIONS] <ID>
+
+Arguments:
+  <ID>  A###### or PT-F####
+
+Options:
+      --count <N>     Number of complete rows to generate, 1..512 [default: 12]
+      --bfile <FILE>  Write b-file here (create new file; never overwrite)
+  -h, --help          Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: text] [possible values: text, json]
+      --json             Emit machine-readable JSON (same as --format json)
+
+Examples:
+  polytool families export-oeis PT-F0001 --count 40 --bfile packing.txt
+  polytool families export-oeis PT-F0002 --json
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input

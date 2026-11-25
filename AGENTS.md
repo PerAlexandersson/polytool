@@ -34,6 +34,10 @@
     `recurrence/implicit/algebra.rs`; bundled
     OEIS families: `oeis` (data in `data/oeis-catalog.jsonl`, generated into
     `$OUT_DIR` by `build.rs`; record schema in `src/oeis_catalog_schema.rs`);
+    curated submission-bound sequence families: `families` (strict sidecars in
+    `data/families/`, derived OEIS metadata, generator replay and OEIS exports;
+    guide `doc/cli-families.md`). Keep canonical OEIS generators and proof
+    flags in the OEIS catalog; sidecars supply background and public links;
   - structured diagnostics: `coefficient_tests`, `hstar_inequalities`,
     `cyclic_sieving`, `decomposition`, `basis`, `bkw`;
     `family_check` selects the first failed finite-family requirement from

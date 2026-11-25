@@ -1,0 +1,22 @@
+Show complete curated metadata and canonical generator.
+
+
+
+Usage: polytool families show [OPTIONS] <ID>
+
+Arguments:
+  <ID>  A###### or PT-F####
+
+Options:
+  -h, --help  Print help
+
+Input and output:
+      --format <FORMAT>  Output format [default: json] [possible values: json]
+      --json             Emit JSON (the default; accepted for uniformity)
+
+Examples:
+  polytool families show PT-F0001
+
+Exit status:
+  0  answered (also when the mathematical answer is negative)
+  2  usage error or invalid input

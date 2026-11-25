@@ -12,7 +12,7 @@ it does not claim Lean replay or independently verify the cited statements.
 
 Source API documentation uses Rust's `//!` and `///` comments. Build it with
 `cargo doc --locked --no-deps`. To combine the guides, executable-derived
-command reference and searchable rustdoc for all three core libraries, install
+command reference, curated families and searchable rustdoc for all four core libraries, install
 Python 3.10 or later and Pandoc, then run from the repository root:
 
 ```sh
@@ -37,6 +37,13 @@ after a deliberate change).
 outside the workspace (its `doc/` is rebuilt each run); `--binary PATH` takes
 help output from an existing `polytool` instead of building one;
 `--command-source scrape` forces the `--help` scraping path.
+`--lean-export FILE` checks manual family mappings against a local proof-owner
+declaration export at pinned commits.
+
+The builder also runs `families validate`, renders a filterable index and one
+page for every catalog family, and generates the first rows, OEIS draft blocks,
+b-files and proposal skeletons through the built CLI. See the
+[family guide](cli-families.md) for schema and proof-link conventions.
 
 The command reference has two sources. When `polytool help --json` describes
 commands richly (entries with `usage`, `description`, `options`, `examples` or
@@ -83,7 +90,7 @@ example the web job is `wasm-pack build --release --target no-modules
 
 `docs.yml` builds the site with `scripts/build-docs.py` (which fails on broken
 local links, unresolved guide links and symbolic links), checks that the front
-page, command reference and the four rustdoc entry points exist, and uploads
+page, command reference, family index/seed pages/b-file, and the four rustdoc entry points exist, and uploads
 the Pages artifact. Pull requests only build. A push to `main`, or a manual run
 on `main` with `publish` left enabled, deploys to GitHub Pages through the
 `github-pages` environment. One-time setup: in the repository settings set

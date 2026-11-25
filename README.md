@@ -26,6 +26,8 @@ and standard sequences — all with exact arithmetic.
 - Finite Athanasiadis--Wagner interlacing matrices, standard sequences
   (Eulerian, Narayana, Chebyshev, Hermite, ...), and enumeration of real-rooted
   integer polynomials with a prescribed leading prefix.
+- A curated family overview with public proof links, exact generators and OEIS
+  draft exports; see [the family guide](doc/cli-families.md).
 - A command-line tool, an MCP server and a browser (WebAssembly) wrapper, all
   over the same exact-arithmetic library.
 
@@ -115,6 +117,7 @@ combines the guides, generated CLI reference and rustdoc into a static site.
 
 | Command | Purpose |
 | --- | --- |
+| `families` | Curated OEIS and submission-bound families, generation and OEIS drafts; [guide](doc/cli-families.md) |
 | `exp-rows` | Exact exponential-family rows from series expressions, in-process checks and symbolic routes; [guide](doc/cli-exp-rows.md) |
 
 Polynomials are read from standard input, one per line, as comma-separated

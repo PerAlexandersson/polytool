@@ -325,3 +325,11 @@ coverage checked against `tools/list`. It also documents the CLI-only
 Additional registered tools include `bicyclic_sieving`, `exact_root_enclosures`,
 `find_recurrence_spaces`, `recurrence_theorems` and `verify_recurrence_spaces`;
 see that reference for their request shapes, limits and proof scope.
+
+## Curated families
+
+`list_families`, `get_family`, `generate_family_rows` and `export_family_oeis`
+cover the curated OEIS and submission-bound catalog. Generation/export accept
+`{"id":"PT-F0001","count":9}` (count 1–64). Lists are paged (limit 1–100);
+exports return draft blocks, proposal TOML and b-file text without writing or
+submitting. See [the family guide](cli-families.md) for metadata, proof scope and limits.

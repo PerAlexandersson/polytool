@@ -413,6 +413,27 @@ fn main() {
         .map(std::path::PathBuf::from)
         .expect("Cargo sets CARGO_MANIFEST_DIR for build scripts");
     generate_oeis_catalog(&manifest_dir);
+    let sidecar_dir = manifest_dir.join("data/families");
+    println!("cargo:rerun-if-changed=data/families");
+    let mut files: Vec<_> = std::fs::read_dir(sidecar_dir)
+        .expect("family sidecar directory")
+        .map(|entry| entry.expect("sidecar entry").path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    files.sort();
+    let mut source = String::from("const FAMILY_SIDECARS: &[(&str, &str)] = &[\n");
+    for path in files {
+        let name = path.file_name().unwrap().to_str().unwrap();
+        let text = std::fs::read_to_string(&path).expect("read family sidecar");
+        let _: serde_json::Value = serde_json::from_str(&text).expect("valid sidecar JSON");
+        source.push_str(&format!("({name:?}, {text:?}),\n"));
+    }
+    source.push_str("];\n");
+    std::fs::write(
+        std::path::PathBuf::from(env::var_os("OUT_DIR").unwrap()).join("family_sidecars.rs"),
+        source,
+    )
+    .expect("write bundled family sidecars");
 
     let commit = match env::var("POLYTOOL_GIT_COMMIT") {
         Ok(value) => normalized_commit(&value),

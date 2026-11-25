@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "id": "PT-F0002",
+  "title": "Triangle read by rows: packings of connected edge sets with at most 5 edges in K_n, by number of pieces.",
+  "definition": "T(n,k) counts unordered sets of k pairwise vertex-disjoint nonempty connected edge sets, each with at most 5 edges, in the labelled complete graph K_n. Unused vertices are allowed; distinct edge sets on the same support count separately. n >= 0, 0 <= k <= floor(n/2); the empty packing contributes 1.",
+  "formula": "C_0(t)=1; C_n(t)=C_{n-1}(t)+t sum_{r=2}^{min(n,6)} w_r binomial(n-1,r-1) C_{n-r}(t), with (w_2,...,w_6)=(1,4,37,347,1296).",
+  "generating_function": "sum_{n>=0} C_n(t) z^n/n! = exp(z + t B(z)), B(z) = sum_{r>=2} w_r z^r/r!.",
+  "generator": {
+    "kind": "exp_rows",
+    "family": {
+      "unmarked": {
+        "kind": "sizes",
+        "sizes": [
+          1
+        ]
+      },
+      "marked": {
+        "kind": "finite",
+        "weights": [
+          "0",
+          "1",
+          "4",
+          "37",
+          "347",
+          "1296"
+        ]
+      }
+    }
+  },
+  "first_row": 0,
+  "flattened_offset": 0,
+  "layout": "tabf",
+  "degree_pattern": "floor(n/2)",
+  "initial_rows": [
+    [
+      "1"
+    ],
+    [
+      "1"
+    ],
+    [
+      "1",
+      "1"
+    ],
+    [
+      "1",
+      "7"
+    ],
+    [
+      "1",
+      "59",
+      "3"
+    ],
+    [
+      "1",
+      "582",
+      "55"
+    ],
+    [
+      "1",
+      "4028",
+      "1000",
+      "15"
+    ],
+    [
+      "1",
+      "17815",
+      "18417",
+      "525"
+    ],
+    [
+      "1",
+      "58562",
+      "284137",
+      "16030",
+      "105"
+    ]
+  ],
+  "references": [
+    {
+      "key": "RR2646",
+      "citation": "RealRooted issue #2646 (2026)",
+      "doi": null,
+      "arxiv": null,
+      "locator": "Complete graphs at edge caps four and five",
+      "url": "https://github.com/PerAlexandersson/RealRooted/issues/2646"
+    }
+  ],
+  "real_rootedness": {
+    "status": "conjectured",
+    "as_of": "2026-11-25",
+    "theorem": null,
+    "statement": "Conjecture: every nonconstant row has simple negative zeros.",
+    "lean": null,
+    "paper_proof": null,
+    "finite_range": {
+      "first": 2,
+      "last": 120,
+      "evidence": "Reported exact rational sign brackets in public RealRooted issue #2646; consecutive pairs through (119,120)."
+    },
+    "lag": null
+  },
+  "interlacing": {
+    "status": "conjectured",
+    "as_of": "2026-11-25",
+    "theorem": null,
+    "statement": "Conjecture: zeros of consecutive rows strictly alternate, including equal-degree pairs.",
+    "lean": null,
+    "paper_proof": null,
+    "finite_range": {
+      "first": 2,
+      "last": 119,
+      "evidence": "Reported exact rational sign brackets in public RealRooted issue #2646; consecutive pairs through (119,120)."
+    },
+    "lag": 1
+  },
+  "models": [],
+  "related": [
+    {
+      "id": "PT-F0001",
+      "relation": "Same packing construction with a different edge cap; not a claimed polynomial transform."
+    }
+  ],
+  "oeis": {
+    "id": null,
+    "checked": "2026-11-25",
+    "queries": [
+      "1, 59, 3, 1, 582, 55, 1, 4028, 1000, 15",
+      "row sums: 1, 1, 2, 8, 63, 638, 5044, 36758, 358835"
+    ]
+  },
+  "submission": {
+    "state": "draft",
+    "date": null,
+    "a_number": null
+  },
+  "links": [
+    "https://github.com/PerAlexandersson/oeis-contributions/blob/main/proposals/new-complete-graph-packings-cap5.toml"
+  ],
+  "generator_status": null
+}

@@ -9,3 +9,10 @@ table { border-collapse: collapse; display: block; overflow: auto; }
 td, th { text-align: left; padding: .5rem .8rem; border-bottom: 1px solid #8885; }
 footer { margin-top: 3rem; border-top: 1px solid #8885; padding-top: 1rem; font-size: .9rem; }
 li { margin-block: .25rem; }
+
+/* Wide family metadata tables remain usable on small screens. */
+.family-table { overflow-x: auto; }
+#families th, #families td { vertical-align: top; }
+#families td:nth-child(2) { min-width: 20rem; }
+pre { overflow-x: auto; }
+[hidden] { display: none !important; }

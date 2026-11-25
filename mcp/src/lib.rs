@@ -7,7 +7,9 @@
 mod enumeration;
 mod exponential_rows;
 pub use exponential_rows::ExponentialRowsToolRequest;
+mod families;
 mod family;
+pub use families::{GenerateFamilyRowsRequest, GetFamilyRequest, ListFamiliesRequest};
 mod limits;
 mod parsing;
 mod planar_network;

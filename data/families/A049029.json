@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "id": "A049029",
+  "title": "Triangle read by rows, the Bell transform of the quartic factorial numbers A007696(n+1) without column 0.",
+  "definition": "For n >= 1, row n is the reversal of the rook polynomial of the Ferrers board with column heights 5, 10, ..., 5(n-1).",
+  "formula": "P_n(t)=t^{n-1} R_{n-1}(1/t)",
+  "generating_function": "",
+  "generator": {
+    "kind": "oeis",
+    "id": "A049029"
+  },
+  "first_row": 1,
+  "flattened_offset": 1,
+  "layout": "tabl",
+  "degree_pattern": "n-1",
+  "initial_rows": [],
+  "references": [
+    {
+      "key": "Wagner2008",
+      "citation": "D. G. Wagner, Weighted enumeration of spanning subgraphs with degree constraints (2008)",
+      "doi": null,
+      "arxiv": "0803.1659v1",
+      "locator": "Corollary 3.3(a) and Example 4.1",
+      "url": "https://arxiv.org/abs/0803.1659v1"
+    }
+  ],
+  "real_rootedness": {
+    "status": "unknown",
+    "as_of": null,
+    "theorem": "Wagner2008",
+    "statement": "",
+    "lean": null,
+    "paper_proof": null,
+    "finite_range": null,
+    "lag": null
+  },
+  "interlacing": {
+    "status": "unknown",
+    "as_of": null,
+    "theorem": null,
+    "statement": "",
+    "lean": null,
+    "paper_proof": null,
+    "finite_range": null,
+    "lag": null
+  },
+  "models": [],
+  "related": [],
+  "oeis": {
+    "id": "A049029",
+    "checked": null,
+    "queries": []
+  },
+  "submission": {
+    "state": "not_started",
+    "date": null,
+    "a_number": null
+  },
+  "links": [],
+  "generator_status": null
+}

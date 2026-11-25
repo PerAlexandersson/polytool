@@ -46,6 +46,7 @@ Sequences and recurrences:
 
 OEIS families:
   oeis                               List and generate recurrence-backed OEIS families
+  families                           Curated sequence families, proof attestations and OEIS submission drafts
 
 Expansions and conversions:
   gamma-expansion                    Expand palindromic polynomials in the gamma basis

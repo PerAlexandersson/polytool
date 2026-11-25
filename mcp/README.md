@@ -1288,3 +1288,11 @@ are recomputed). A proved
 result concerns the recurrence-defined sequence; finite fits require a
 separate all-index identity. Lean replay is not attempted. See
 [the proof-discovery guide](../doc/proof-discovery.md).
+
+## Curated families
+
+`list_families`, `get_family`, `generate_family_rows` and `export_family_oeis`
+cover the curated OEIS and submission-bound catalog. Generation/export accept
+`{"id":"PT-F0001","count":9}` (count 1–64). Lists are paged (limit 1–100);
+exports return draft blocks, proposal TOML and b-file text without writing or
+submitting. See [the family guide](../doc/cli-families.md) for metadata, proof scope and limits.

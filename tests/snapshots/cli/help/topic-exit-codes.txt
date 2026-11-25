@@ -125,6 +125,24 @@ Per command:
   oeis entries
       0 entries listed (possibly empty)
       2 usage error or unreadable data
+  families
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  families list
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  families show
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  families generate
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  families export-oeis
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
+  families validate
+      0 answered (also when the mathematical answer is negative)
+      2 usage error or invalid input
   gamma-expansion
       0 every row has a gamma expansion
       1 some row is not palindromic

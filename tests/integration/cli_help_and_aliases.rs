@@ -178,6 +178,14 @@ fn probe_args(path: &[String], spec: &Value) -> Vec<Vec<String>> {
     }
     let mut runs = Vec::new();
     for flag in spec["flags"].as_array().unwrap() {
+        // A generic filename would persist in the shared read-only fixtures and
+        // change later --input probes. Creation/no-overwrite has its own test.
+        if path[0] == "families"
+            && path.get(1).is_some_and(|name| name == "export-oeis")
+            && flag["long"] == "--bfile"
+        {
+            continue;
+        }
         let mut args = base.clone();
         args.push(flag["long"].as_str().unwrap().to_string());
         let arity = flag["arity"].as_u64().unwrap() as usize;

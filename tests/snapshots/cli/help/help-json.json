@@ -4867,6 +4867,456 @@
       "usage": []
     },
     {
+      "aliases": [],
+      "deprecated_aliases": [],
+      "description": "One overview of bundled OEIS families and curated submission-bound families. Canonical OEIS generators/statuses are inherited, with curated JSON metadata and non-OEIS exp-rows or recurrence generators. This catalog is separate from an automated discovery census.",
+      "details": "",
+      "examples": [
+        "polytool families list --query packing",
+        "polytool families generate PT-F0001 --count 9",
+        "polytool families export-oeis PT-F0002 --json"
+      ],
+      "exit_codes": [
+        {
+          "code": 0,
+          "meaning": "answered (also when the mathematical answer is negative)"
+        },
+        {
+          "code": 2,
+          "meaning": "usage error or invalid input"
+        }
+      ],
+      "flags": [],
+      "group": "OEIS families",
+      "input": null,
+      "name": "families",
+      "output": {
+        "default": null,
+        "formats": []
+      },
+      "positionals": [],
+      "see_also": [
+        "oeis",
+        "exp-rows"
+      ],
+      "subcommands": [
+        {
+          "aliases": [],
+          "deprecated_aliases": [],
+          "description": "",
+          "details": "",
+          "examples": [
+            "polytool families list --status theorem_proved --json"
+          ],
+          "exit_codes": [
+            {
+              "code": 0,
+              "meaning": "answered (also when the mathematical answer is negative)"
+            },
+            {
+              "code": 2,
+              "meaning": "usage error or invalid input"
+            }
+          ],
+          "flags": [
+            {
+              "arity": 1,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Options",
+              "help": "Case-insensitive ID/title filter",
+              "hidden": false,
+              "long": "--query",
+              "name": "query",
+              "value": "TEXT"
+            },
+            {
+              "arity": 1,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Options",
+              "help": "Real-rootedness status filter",
+              "hidden": false,
+              "long": "--status",
+              "name": "status",
+              "value": "STATUS"
+            },
+            {
+              "arity": 1,
+              "choices": [
+                "text",
+                "json"
+              ],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Output format [default: text]",
+              "hidden": false,
+              "long": "--format",
+              "name": "format",
+              "value": "FORMAT"
+            },
+            {
+              "arity": 0,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Emit machine-readable JSON (same as --format json)",
+              "hidden": false,
+              "long": "--json",
+              "name": "json",
+              "value": null
+            }
+          ],
+          "group": "",
+          "input": null,
+          "name": "list",
+          "output": {
+            "default": "text",
+            "formats": [
+              "text",
+              "json"
+            ]
+          },
+          "positionals": [],
+          "see_also": [],
+          "subcommands": [],
+          "summary": "List OEIS and submission-bound sequence families",
+          "usage": []
+        },
+        {
+          "aliases": [],
+          "deprecated_aliases": [],
+          "description": "",
+          "details": "",
+          "examples": [
+            "polytool families show PT-F0001"
+          ],
+          "exit_codes": [
+            {
+              "code": 0,
+              "meaning": "answered (also when the mathematical answer is negative)"
+            },
+            {
+              "code": 2,
+              "meaning": "usage error or invalid input"
+            }
+          ],
+          "flags": [
+            {
+              "arity": 1,
+              "choices": [
+                "json"
+              ],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Output format [default: json]",
+              "hidden": false,
+              "long": "--format",
+              "name": "format",
+              "value": "FORMAT"
+            },
+            {
+              "arity": 0,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Emit JSON (the default; accepted for uniformity)",
+              "hidden": false,
+              "long": "--json",
+              "name": "json",
+              "value": null
+            }
+          ],
+          "group": "",
+          "input": null,
+          "name": "show",
+          "output": {
+            "default": "json",
+            "formats": [
+              "json"
+            ]
+          },
+          "positionals": [
+            {
+              "choices": [],
+              "help": "A###### or PT-F####",
+              "multiple": false,
+              "name": "ID",
+              "required": true
+            }
+          ],
+          "see_also": [],
+          "subcommands": [],
+          "summary": "Show complete curated metadata and canonical generator",
+          "usage": []
+        },
+        {
+          "aliases": [],
+          "deprecated_aliases": [],
+          "description": "",
+          "details": "",
+          "examples": [
+            "polytool families generate PT-F0001 --count 9 --format rows"
+          ],
+          "exit_codes": [
+            {
+              "code": 0,
+              "meaning": "answered (also when the mathematical answer is negative)"
+            },
+            {
+              "code": 2,
+              "meaning": "usage error or invalid input"
+            }
+          ],
+          "flags": [
+            {
+              "arity": 1,
+              "choices": [],
+              "default": "8",
+              "deprecated_aliases": [],
+              "heading": "Options",
+              "help": "Number of complete rows, 1..512",
+              "hidden": false,
+              "long": "--count",
+              "name": "count",
+              "value": "N"
+            },
+            {
+              "arity": 1,
+              "choices": [
+                "rows",
+                "terms",
+                "json"
+              ],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Output format [default: rows]",
+              "hidden": false,
+              "long": "--format",
+              "name": "format",
+              "value": "FORMAT"
+            },
+            {
+              "arity": 0,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Emit machine-readable JSON (same as --format json)",
+              "hidden": false,
+              "long": "--json",
+              "name": "json",
+              "value": null
+            }
+          ],
+          "group": "",
+          "input": null,
+          "name": "generate",
+          "output": {
+            "default": "rows",
+            "formats": [
+              "rows",
+              "terms",
+              "json"
+            ]
+          },
+          "positionals": [
+            {
+              "choices": [],
+              "help": "A###### or PT-F####",
+              "multiple": false,
+              "name": "ID",
+              "required": true
+            }
+          ],
+          "see_also": [],
+          "subcommands": [],
+          "summary": "Generate the first complete exact coefficient rows",
+          "usage": []
+        },
+        {
+          "aliases": [],
+          "deprecated_aliases": [],
+          "description": "Generate a conservative 240-byte data prefix in at most three 80-byte OEIS lines, plus a b-file bounded to 10,000 terms and 1 MiB. Review authors, search date, keywords and generator adapter in the proposal skeleton. This command does not submit anything.",
+          "details": "",
+          "examples": [
+            "polytool families export-oeis PT-F0001 --count 40 --bfile packing.txt",
+            "polytool families export-oeis PT-F0002 --json"
+          ],
+          "exit_codes": [
+            {
+              "code": 0,
+              "meaning": "answered (also when the mathematical answer is negative)"
+            },
+            {
+              "code": 2,
+              "meaning": "usage error or invalid input"
+            }
+          ],
+          "flags": [
+            {
+              "arity": 1,
+              "choices": [],
+              "default": "12",
+              "deprecated_aliases": [],
+              "heading": "Options",
+              "help": "Number of complete rows to generate, 1..512",
+              "hidden": false,
+              "long": "--count",
+              "name": "count",
+              "value": "N"
+            },
+            {
+              "arity": 1,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Options",
+              "help": "Write b-file here (create new file; never overwrite)",
+              "hidden": false,
+              "long": "--bfile",
+              "name": "bfile",
+              "value": "FILE"
+            },
+            {
+              "arity": 1,
+              "choices": [
+                "text",
+                "json"
+              ],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Output format [default: text]",
+              "hidden": false,
+              "long": "--format",
+              "name": "format",
+              "value": "FORMAT"
+            },
+            {
+              "arity": 0,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Emit machine-readable JSON (same as --format json)",
+              "hidden": false,
+              "long": "--json",
+              "name": "json",
+              "value": null
+            }
+          ],
+          "group": "",
+          "input": null,
+          "name": "export-oeis",
+          "output": {
+            "default": "text",
+            "formats": [
+              "text",
+              "json"
+            ]
+          },
+          "positionals": [
+            {
+              "choices": [],
+              "help": "A###### or PT-F####",
+              "multiple": false,
+              "name": "ID",
+              "required": true
+            }
+          ],
+          "see_also": [],
+          "subcommands": [],
+          "summary": "Print copyable OEIS draft blocks and a proposal TOML skeleton",
+          "usage": []
+        },
+        {
+          "aliases": [],
+          "deprecated_aliases": [],
+          "description": "",
+          "details": "",
+          "examples": [
+            "polytool families validate --json"
+          ],
+          "exit_codes": [
+            {
+              "code": 0,
+              "meaning": "answered (also when the mathematical answer is negative)"
+            },
+            {
+              "code": 2,
+              "meaning": "usage error or invalid input"
+            }
+          ],
+          "flags": [
+            {
+              "arity": 1,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Options",
+              "help": "Optional public proof-owner JSON declaration list at pinned commits",
+              "hidden": false,
+              "long": "--lean-export",
+              "name": "lean-export",
+              "value": "FILE"
+            },
+            {
+              "arity": 1,
+              "choices": [
+                "text",
+                "json"
+              ],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Output format [default: text]",
+              "hidden": false,
+              "long": "--format",
+              "name": "format",
+              "value": "FORMAT"
+            },
+            {
+              "arity": 0,
+              "choices": [],
+              "default": null,
+              "deprecated_aliases": [],
+              "heading": "Input and output",
+              "help": "Emit machine-readable JSON (same as --format json)",
+              "hidden": false,
+              "long": "--json",
+              "name": "json",
+              "value": null
+            }
+          ],
+          "group": "",
+          "input": null,
+          "name": "validate",
+          "output": {
+            "default": "text",
+            "formats": [
+              "text",
+              "json"
+            ]
+          },
+          "positionals": [],
+          "see_also": [],
+          "subcommands": [],
+          "summary": "Validate all bundled sidecars, references and reproduced rows",
+          "usage": []
+        }
+      ],
+      "summary": "Curated sequence families, proof attestations and OEIS submission drafts",
+      "usage": []
+    },
+    {
       "aliases": [
         "gamma"
       ],

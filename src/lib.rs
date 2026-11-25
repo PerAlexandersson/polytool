@@ -112,6 +112,8 @@
 //!   symbolic variable-predecessor recurrences `Q_n = Q_(n-1) + w(n) t Q_(p(n))`
 //!   with exact hypotheses certificates, and conditional theorem matches for
 //!   found or supplied recurrences
+//! - [`families`] — Curated sequence-family metadata, exact generation, validation
+//!   and OEIS draft exports over canonical generators.
 //! - [`oeis`] — Bundled recurrence-backed OEIS polynomial families, with lazy
 //!   row iterators, b-file text from any coefficient rows, and OEIS-ready
 //!   text (triangle example, recurrence sentence, Mathematica and PARI/GP
@@ -168,6 +170,7 @@ pub mod cyclic_sieving;
 pub mod decomposition;
 pub mod digest;
 pub mod factorization;
+pub mod families;
 pub mod family_check;
 pub mod hstar_inequalities;
 pub mod hurwitz;

@@ -7,6 +7,7 @@
 mod developer;
 mod exp_rows;
 mod expansions;
+mod families;
 mod inspect;
 mod networks;
 mod oeis;
@@ -63,6 +64,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     recurrence::RECURRENCE_IMPLICIT,
     recurrence::RECURRENCE_SEARCH_REPRESENTATIONS,
     oeis::OEIS,
+    families::FAMILIES,
     expansions::GAMMA_EXPANSION,
     expansions::BERNSTEIN_EXPANSION,
     expansions::HSTAR_TO_EHRHART,

@@ -23,6 +23,7 @@ mod ehrhart;
 mod enumerate_real_rooted;
 mod exp_rows;
 mod expansion;
+mod families;
 mod family_check;
 mod input;
 mod interlacing;

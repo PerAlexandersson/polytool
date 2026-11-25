@@ -24,8 +24,12 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 from urllib.parse import unquote, urlsplit, urlunsplit
+
+sys.dont_write_bytecode = True
+from family_docs import render_families
 
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "https://github.com/PerAlexandersson/polytool/blob/main/"
@@ -198,7 +202,7 @@ def verify_links(output):
 
     parser = Links()
     # Rustdoc owns its internal links; check the guide's links into it too.
-    for page in [output / "index.html", output / "README.html", *output.glob("doc/**/*.html")]:
+    for page in [output / "index.html", output / "README.html", *output.glob("doc/**/*.html"), *output.glob("families/*.html")]:
         parser.page = page
         parser.feed(page.read_text())
     if any(p.is_symlink() for p in output.rglob("*")):
@@ -217,6 +221,8 @@ def main():
     parser.add_argument("--binary", type=Path,
                         help="use this polytool binary for help output instead of building one "
                              "(used to test the command-reference paths)")
+    parser.add_argument("--lean-export", type=Path,
+                        help="optional public proof-owner declaration JSON at pinned commits")
     args = parser.parse_args()
     output = args.output.resolve()
     workspace = Path(json.loads(captured(
@@ -230,7 +236,7 @@ def main():
         if not shutil.which(executable):
             parser.error(f"missing build tool: {executable}")
     output.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="polytool-docs-", dir="/tmp") as temporary:
+    with tempfile.TemporaryDirectory(prefix="polytool-docs-") as temporary:
         temp = Path(temporary)
         target = args.target_dir.resolve() if args.target_dir else temp / "target"
         if target.is_relative_to(workspace):
@@ -248,6 +254,7 @@ def main():
             "-p", "ore-algebra", "-p", "exact-algebra", env=env)
         shutil.copytree(target / "doc", output / "api")
         binary = str(args.binary.resolve() if args.binary else target / "debug/polytool")
+        render_families(binary, output, args.lean_export)
         metadata = load_help_metadata(binary)
         rich = args.command_source == "auto" and metadata is not None and is_rich(metadata)
         print("Command reference source:",
@@ -268,6 +275,7 @@ def main():
             python = (f'<a href="{prefix}/doc/python.html">Python</a>'
                       if ROOT / "doc/python.md" in sources else "")
             nav.write_text(f'<nav aria-label="Documentation"><a href="{prefix}/index.html">Polytool</a>'
+                           f'<a href="{prefix}/families/index.html">Families</a>'
                            f'<a href="{prefix}/doc/workflows.html">Workflows</a>'
                            f'<a href="{prefix}/doc/command-reference.html">Commands</a>'
                            f'{python}'
@@ -293,7 +301,8 @@ def main():
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>Polytool documentation</title><link rel="stylesheet" href="style.css">'
             '<main><h1>Polytool</h1><p>Exact polynomial tools for combinatorial research.</p>'
-            '<ul><li><a href="doc/workflows.html">Start with a CLI workflow</a></li>'
+            '<ul><li><a href="families/index.html">Explore polynomial families and OEIS drafts</a></li>'
+            '<li><a href="doc/workflows.html">Start with a CLI workflow</a></li>'
             '<li><a href="doc/command-reference.html">Browse every command and option</a></li>'
             '<li><a href="api/polytool/index.html">Search the Rust API</a></li>'
             '<li><a href="doc/library.html">Use the library</a></li>'

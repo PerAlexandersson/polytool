@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "id": "A143494",
+  "title": "Triangle read by rows: 2-Stirling numbers of the second kind.",
+  "definition": "Row n is the Poisson-offset polynomial with n-2 offsets equal to 2, for n >= 2.",
+  "formula": "Q_0=1; Q_{m+1}=(t+2)Q_m+t Q_m\\prime; P_n=Q_{n-2}",
+  "generating_function": "",
+  "generator": {
+    "kind": "oeis",
+    "id": "A143494"
+  },
+  "first_row": 2,
+  "flattened_offset": 2,
+  "layout": "tabl",
+  "degree_pattern": "n-2",
+  "initial_rows": [],
+  "references": [
+    {
+      "key": "PoissonPF",
+      "citation": "RealRooted.DistinctValues.poissonPolynomial_isPFPolynomial",
+      "doi": null,
+      "arxiv": null,
+      "locator": "Poisson.lean, lines 75-81; nonnegative offsets",
+      "url": "https://github.com/PerAlexandersson/RealRooted/blob/28fa02e98eedb2e351ff7aa203cbf0f8181668f0/RealRooted/DistinctValues/Poisson.lean#L75-L81"
+    }
+  ],
+  "real_rootedness": {
+    "status": "unknown",
+    "as_of": null,
+    "theorem": "PoissonPF",
+    "statement": "",
+    "lean": {
+      "repository": "https://github.com/PerAlexandersson/RealRooted",
+      "declaration": "RealRooted.DistinctValues.poissonPolynomial_isPFPolynomial",
+      "commit": "28fa02e98eedb2e351ff7aa203cbf0f8181668f0",
+      "permalink": "https://github.com/PerAlexandersson/RealRooted/blob/28fa02e98eedb2e351ff7aa203cbf0f8181668f0/RealRooted/DistinctValues/Poisson.lean#L75-L81"
+    },
+    "paper_proof": null,
+    "finite_range": null,
+    "lag": null
+  },
+  "interlacing": {
+    "status": "unknown",
+    "as_of": null,
+    "theorem": null,
+    "statement": "",
+    "lean": null,
+    "paper_proof": null,
+    "finite_range": null,
+    "lag": null
+  },
+  "models": [],
+  "related": [],
+  "oeis": {
+    "id": "A143494",
+    "checked": null,
+    "queries": []
+  },
+  "submission": {
+    "state": "not_started",
+    "date": null,
+    "a_number": null
+  },
+  "links": [],
+  "generator_status": null
+}

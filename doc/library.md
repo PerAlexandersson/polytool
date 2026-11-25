@@ -2504,3 +2504,17 @@ roots; shared-factor products transfer only weak adjacent interlacing.
 `certify_constant_coefficient_index_subsequence` constructs and replays a
 stationary index-section identity without a root assertion through
 `ConstantCoefficientIndexSubsequenceCertificate`.
+
+## Curated sequence families
+
+The `families` module derives OEIS records and merges strict JSON sidecars:
+
+```rust
+let catalog = polytool::families::catalog().unwrap();
+let family = catalog.iter().find(|f| f.id == "PT-F0001").unwrap();
+assert_eq!(family.generate_rows(5).unwrap()[4], ["1", "53", "3"]);
+let draft = polytool::families::export_oeis(family, 12).unwrap();
+assert!(draft.blocks.contains("%S A000000"));
+```
+
+See [the family guide](cli-families.md) for validators and public proof attestations.

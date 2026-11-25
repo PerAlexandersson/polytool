@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "id": "A089503",
+  "title": "Triangle of numbers used for basis change between certain falling factorials.",
+  "definition": "Row n is the rook polynomial of a rectangle with n-1 columns and 2n rows, for n >= 1.",
+  "formula": "[t^k]P_n(t) = binomial(n-1,k) (2n)_{falling k}",
+  "generating_function": "",
+  "generator": {
+    "kind": "oeis",
+    "id": "A089503"
+  },
+  "first_row": 1,
+  "flattened_offset": 1,
+  "layout": "tabl",
+  "degree_pattern": "n-1",
+  "initial_rows": [],
+  "references": [
+    {
+      "key": "Wagner2008",
+      "citation": "D. G. Wagner, Weighted enumeration of spanning subgraphs with degree constraints (2008)",
+      "doi": null,
+      "arxiv": "0803.1659v1",
+      "locator": "Corollary 3.3(a) and Example 4.1",
+      "url": "https://arxiv.org/abs/0803.1659v1"
+    }
+  ],
+  "real_rootedness": {
+    "status": "unknown",
+    "as_of": null,
+    "theorem": "Wagner2008",
+    "statement": "",
+    "lean": null,
+    "paper_proof": null,
+    "finite_range": null,
+    "lag": null
+  },
+  "interlacing": {
+    "status": "unknown",
+    "as_of": null,
+    "theorem": null,
+    "statement": "",
+    "lean": null,
+    "paper_proof": null,
+    "finite_range": null,
+    "lag": null
+  },
+  "models": [],
+  "related": [],
+  "oeis": {
+    "id": "A089503",
+    "checked": null,
+    "queries": []
+  },
+  "submission": {
+    "state": "not_started",
+    "date": null,
+    "a_number": null
+  },
+  "links": [],
+  "generator_status": null
+}
