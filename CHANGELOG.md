@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Add exact exponential-family block-weight generators with dense streaming,
+  sparse extraction and single-marked-size closed forms; CLI `exp-rows` and
+  bounded MCP `generate_exponential_rows` expose in-process roots/interlacing,
+  first-failure certificates and exact replay.
+- Add symbolic nonnegative seed/ODE-substitution routes, paper divisibility
+  obstruction filters (k=8 explicitly under review), an explicitly unreviewed
+  paper routes for polynomial substitution and the rational ODE extension,
+  and exact per-rank
+  multiplier-symbol and one-free-factor pencil evidence. Finite certificates
+  make no all-rank claim. See [the guide](doc/cli-exp-rows.md).
+
 ## 0.9.0 — 2026-11-24
 
 First release after 0.7.0. The development version 0.8.0 was never tagged; its changes are listed here.

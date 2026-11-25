@@ -21,6 +21,7 @@ mod cyclic_sieving;
 mod cyclic_sieving_sequence;
 mod ehrhart;
 mod enumerate_real_rooted;
+mod exp_rows;
 mod expansion;
 mod family_check;
 mod input;

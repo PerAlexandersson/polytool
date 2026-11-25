@@ -1,5 +1,8 @@
 # MCP server
 
+See [exponential-family rows](cli-exp-rows.md) for the exact labelled-block
+generator, CLI/MCP syntax, symbolic routes and finite-rank certificates.
+
 The repository also contains a local Model Context Protocol server in
 `mcp/`. It exposes the exact polynomial routines to MCP clients over stdio.
 

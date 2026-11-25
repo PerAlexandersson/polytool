@@ -17,6 +17,7 @@ and standard sequences — all with exact arithmetic.
   resultants and discriminants.
 - Ehrhart/h\*-vector conversion, h\*-inequalities, cyclic and bicyclic sieving
   checks, Stapledon decomposition.
+- Exact labelled-block exponential rows with sparse extraction and in-process root checks.
 - Recurrence search for polynomial sequences (with certified complete spaces,
   coordinate transformations and implicit differential relations), renewal
   recognition, and a bundled catalog of recurrence-backed OEIS families.
@@ -111,6 +112,10 @@ The [documentation build guide](doc/development.md#documentation-site)
 combines the guides, generated CLI reference and rustdoc into a static site.
 
 ## CLI quick start
+
+| Command | Purpose |
+| --- | --- |
+| `exp-rows` | Exact exponential-family rows, in-process checks and symbolic proof routes; [guide](doc/cli-exp-rows.md) |
 
 Polynomials are read from standard input, one per line, as comma-separated
 integer coefficients in ascending degree order (`1, 11, 11, 1` is

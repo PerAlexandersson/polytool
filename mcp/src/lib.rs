@@ -5,6 +5,8 @@
 //! are serialized as strings.
 
 mod enumeration;
+mod exponential_rows;
+pub use exponential_rows::ExponentialRowsToolRequest;
 mod family;
 mod limits;
 mod parsing;

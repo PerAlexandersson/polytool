@@ -1,4 +1,4 @@
-# RealRooted commit f0a5da0b765237a27fd64624f86acf819a161b46
+# RealRooted commit 726531842c134023acd4073c5005dbbbe67889dd
 # Source declaration inventory; not a proof or axiom audit.
 declaration	RealRooted.BigDescents132.bigDescentPoly
 declaration	RealRooted.BigDescents321.bigDescentPoly_splits
@@ -20,6 +20,12 @@ declaration	RealRooted.EulerBidiagonal.generalStep
 declaration	RealRooted.EulerianTransform.transform_magicExpansion_interl
 declaration	RealRooted.EulerianTransform.transform_magicExpansion_isPF
 declaration	RealRooted.EvenDerivative.isPFPolynomial_tfae
+declaration	RealRooted.ExponentialRows.insertionRow_affine_X_X
+declaration	RealRooted.ExponentialRows.insertionRow_interl_subst
+declaration	RealRooted.ExponentialRows.insertionRow_isRealRooted_quartic_of_nonneg
+declaration	RealRooted.ExponentialRows.insertionRow_isRealRooted_threshold_two
+declaration	RealRooted.ExponentialRows.insertionRow_splits_subst
+declaration	RealRooted.ExponentialRows.insertionRow_strictInterl_threshold_two
 declaration	RealRooted.HalfStepRows.isPFPolynomial
 declaration	RealRooted.HalfStepRows.natDegree_eq_div
 declaration	RealRooted.HalfStepRows.strictInterl_add_of_le

@@ -1,5 +1,8 @@
 # CLI usage
 
+See [exponential-family rows](cli-exp-rows.md) for the exact labelled-block
+generator, CLI/MCP syntax, symbolic routes and finite-rank certificates.
+
 `polytool stability [POLYNOMIAL ...]` counts roots exactly in half-planes,
 disks, exteriors and Gaussian Möbius images. Use `--format json` for compact
 summaries, `--format full` or `--certificate FILE` for evidence, and

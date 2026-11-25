@@ -105,6 +105,7 @@
 //!   (`image_recurrence_of_operator`, built on the `ore-algebra` crate), and
 //!   reduced exact rational row generating functions with Riordan decomposition
 //!   ([`recurrence::generating_function`])
+//! - [`exponential_rows`] — labelled-block exponential families and exact symbolic routes
 //! - [`renewal`] — Exact recognition of renewal-type recurrences
 //!   `P_n = sum_j r_j t^j P_(n-1-ell*j)` with interlacing consequences,
 //!   symbolic variable-predecessor recurrences `Q_n = Q_(n-1) + w(n) t Q_(p(n))`
@@ -204,6 +205,8 @@ pub use linalg::{
     sparse_modular_linear_system_consistent,
 };
 
+/// Exact labelled-block exponential families, streaming checks and proof routes.
+pub mod exponential_rows;
 pub mod parse;
 pub mod real_rooted_enumeration;
 pub mod real_rootedness;
@@ -211,6 +214,7 @@ pub mod recurrence;
 pub mod renewal;
 pub mod root_count;
 pub mod sequences;
+pub use exponential_rows::{check_exponential_rows, BlockWeightSpec, ExponentialFamily};
 
 pub use basis::{
     analyze_magic_basis_bigint, analyze_magic_basis_i64, bernstein_basis_bigint,

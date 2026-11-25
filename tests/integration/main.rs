@@ -14,6 +14,7 @@ mod cli_bench_real_rootedness;
 mod cli_bigint;
 mod cli_compatibility;
 mod cli_enumerate_real_rooted;
+mod cli_exponential_rows;
 mod cli_family_check_bigint;
 mod cli_help_and_aliases;
 mod cli_oeis;

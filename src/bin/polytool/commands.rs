@@ -5,6 +5,7 @@
 //! flags shared by several commands. The types are in `cli::spec`.
 
 mod developer;
+mod exp_rows;
 mod expansions;
 mod inspect;
 mod networks;
@@ -49,6 +50,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     inspect::RESULTANT,
     inspect::DISCRIMINANT,
     recurrence::SEQUENCE,
+    exp_rows::EXP_ROWS,
     recurrence::RECURRENCE,
     recurrence::RECURRENCE_GENERATE,
     recurrence::RECURRENCE_TRANSFORM,

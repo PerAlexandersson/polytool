@@ -52,6 +52,10 @@ Per command:
   sequence
       0 answered (also when the mathematical answer is negative)
       2 usage error or invalid input
+  exp-rows
+      0 generation, passing finite checks, or successful replay
+      1 a requested finite check failed
+      2 invalid input or replay mismatch
   recurrence
       0 finished (a recurrence was found, or none within the bounds)
       2 usage error or invalid input

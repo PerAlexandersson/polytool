@@ -371,6 +371,18 @@ the tool's input type (wrong JSON types or unknown fields) are instead returned
 as a tool result with `isError: true` and a `failed to deserialize parameters:
 ...` text block, so that clients can show them to the model.
 
+## Exponential-family rows
+
+`generate_exponential_rows` accepts `{"request":{"family":{"unmarked":
+{"kind":"sizes","sizes":[1,2]},"marked":{"kind":"sizes","sizes":[7]}},
+"rows":[304,305],"check":"first_failure","summary":true}}`.
+It returns exact rows/checks and separately labelled symbolic routes.
+See [the guide](../doc/cli-exp-rows.md) for all schemas, bounds and finite-rank
+certificates. `tool_help` exposes that guide as well. Inputs are bounded to
+512 rows, rank 1000, generation degree 256 or checked degree 64, 65536 total
+coefficients and 256-bit input rationals; composed ranks are capped at 128.
+Finite success is evidence only; k=8 obstruction claims remain under review.
+
 ## Tools
 
 ### Implicit relations and equivalent representations

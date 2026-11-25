@@ -95,6 +95,16 @@ impl PolynomialToolsServer {
         }
     }
 
+    #[tool(
+        description = "Generate exact n![z^n]exp(A+tB) rows and check roots/interlacing in process. request uses factorial-normalized block weights; finite successes are evidence only. JSON <=65536 bytes, rows <=512, rank <=1000, generated degree <=256, checked degree <=64, total coefficients <=65536, coefficient bits <=256, composition depth <=4 and composed rank <=128. Returns polytool.exp-rows.v1 with symbolic evidence levels and exact replayable failure certificates."
+    )]
+    pub fn generate_exponential_rows(
+        &self,
+        Parameters(request): Parameters<crate::ExponentialRowsToolRequest>,
+    ) -> Result<Json<serde_json::Value>, McpError> {
+        crate::exponential_rows::run(request).map(Json)
+    }
+
     #[tool(description = "Parse and format one or more dense univariate polynomials.")]
     pub fn parse_polynomials(
         &self,
@@ -122,6 +132,7 @@ impl PolynomialToolsServer {
         Parameters(input): Parameters<crate::requests::ToolHelpRequest>,
     ) -> Result<Json<serde_json::Value>, McpError> {
         match input.tool.as_str() {
+            "generate_exponential_rows" => Ok(Json(json!({"tool":input.tool,"help":include_str!("../../doc/cli-exp-rows.md")}))),
             "stability_univariate" => Ok(Json(
                 json!({"tool":input.tool,"help":crate::stability::HELP}),
             )),
@@ -130,7 +141,7 @@ impl PolynomialToolsServer {
                 "help":include_str!("../../doc/interlacing-refinements.md")
             }))),
             _ => Err(invalid_params(
-                "extended help is available for stability_univariate and discover_interlacing_refinements",
+                "extended help is available for stability_univariate, discover_interlacing_refinements and generate_exponential_rows",
             )),
         }
     }
@@ -2042,7 +2053,7 @@ Ehrhart/h*:
 Sieving:
   cyclic_sieving, bicyclic_sieving, cyclic_sieving_sequence
 OEIS catalog & standard sequences:
-  list_oeis_sequences, get_oeis_sequence, generate_oeis_rows, generate_sequence
+  list_oeis_sequences, get_oeis_sequence, generate_oeis_rows, generate_sequence, generate_exponential_rows
 Reports & help:
   read_report, tool_help
 

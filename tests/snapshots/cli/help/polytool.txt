@@ -31,6 +31,7 @@ Roots and algebra:
 
 Sequences and recurrences:
   sequence                           Generate standard polynomial sequences
+  exp-rows                           Generate exact labelled-block exponential rows and check roots in process
   recurrence                         Search for a polynomial recurrence
   recurrence-generate                Generate coefficient rows from recurrence JSON
   recurrence-transform               Change polynomial coordinates and transport a recurrence

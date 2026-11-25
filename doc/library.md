@@ -1,5 +1,8 @@
 # Library usage
 
+See [exponential-family rows](cli-exp-rows.md) for the exact labelled-block
+generator, CLI/MCP syntax, symbolic routes and finite-rank certificates.
+
 Add to your `Cargo.toml`:
 
 ```toml
