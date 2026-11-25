@@ -191,8 +191,10 @@ marked coefficient signs: nonnegative through rank 3, no negative coefficient
 
 - `theorem_backed`: nonnegative singleton/binomial seeds; `A=z` with nonnegative
   quadratic, cubic or quartic marked series; threshold-two big blocks; and
-  exact `Phi(B_seed)` with `Phi(0)=0`, `Phi'=a+b*x+lambda*Phi`, all parameters
-  nonnegative. Both unmarked and inner series must have structurally
+  exact `Phi(B_seed)` with `Phi(0)=0`, `(1-d*x)Phi'=a+b*x+lambda*Phi`, all
+  four parameters nonnegative (including the original `d=0` ODE route);
+  powers `B_seed^(2^k)`; and `a*B_seed^2+c*B_seed^4` with `a,c>=0`.
+  Both unmarked and inner series must have structurally
   nonnegative coefficients, and the unchanged unmarked series must match
   the seed's hypotheses. These are Rust identity/hypothesis checks against
   public theorems, not a new Lean compilation or axiom audit.
@@ -222,17 +224,43 @@ seed route supplies them.
 
 The paper obstruction source is
 [RealRooted #2415](https://github.com/PerAlexandersson/RealRooted/issues/2415).
-The new exponential registry distinguishes evidence levels, so the optional
+The exponential registry distinguishes evidence levels, so the optional
 `polynomial_substitution` spec accepts `seed` and ordinary `coefficients` of
-`P`. The route requires `A=z`, an admissible seed, positive leading coefficient
-and only real nonpositive zeros of `P`, checked exactly. It is labelled
-`paper_proof`, with status `paper_proof`, and cites the
+`P`. The paper route requires `A=z`, an admissible seed, and either positive
+leading coefficient with only real nonpositive zeros of `P`, or
+`P(x)-P(0)=a*x^2+b*x^3+c*x^4` with `a,b,c>=0`, checked exactly.
+Outside the proved faces below, it is labelled `paper_proof`, with status
+`paper_proof`, and cites the
 [unreviewed round-four argument](https://github.com/PerAlexandersson/RealRooted/issues/2415#issuecomment-7141592218).
-Later ODE substitutions retain the paper evidence level; they do not promote
-the seed to a theorem-backed result. The `rational_ode_substitution` specification takes the ODE fields plus
+Arbitrary powers (for example `B_seed^3` and `B_seed^6`) and the full quartic
+`a*B_seed^2+b*B_seed^3+c*B_seed^4` remain paper-only closure cases. The general
+PF outer-polynomial route does not claim interlacing transfer. A primitive
+quartic seed at `A=z` still has its separate splitness theorem; this does not
+prove the full quartic substitution closure for arbitrary admissible seeds.
+
+The proved polynomial faces are recognized before the PF outer-polynomial
+test: `x^2+x^4` is not PF, but has the even-quartic closure theorem.
+The route identifiers are `power_two_substitution` for exact `B_seed^(2^k)`
+and `even_quartic_substitution` for nonnegative `a*B_seed^2+c*B_seed^4`.
+The constant `P(0)` is subtracted by the structured specification.
+For example, `compose(x^4,exp(z)-1)` and `compose(x^2+x^4,exp(z)-1)`
+both have theorem-backed routes. Explicit powers such as `(exp(z)-1)^4`
+also retain their seed witness. The declarations are
+`RealRooted.ExponentialRows.insertionRow_splits_pow_two_pow`,
+`insertionRow_interl_pow_two_pow`, `insertionRow_splits_even_quartic_subst`
+and `insertionRow_interl_even_quartic_subst` in
+[SubstitutionPowers.lean at b09ae7ff6](https://github.com/PerAlexandersson/RealRooted/blob/b09ae7ff6562bcaada3f998622737f7091feb9f3/RealRooted/ExponentialRows/SubstitutionPowers.lean).
+
+The `rational_ode_substitution` specification takes the ODE fields plus
 `d`, and defines `(1-d*x)Phi'=a+b*x+lambda*Phi`, with zero constant term.
-For `d>0`, its route also uses the unreviewed round-four paper argument and
-requires `A=z` and nonnegative parameters. The block-derivative coefficients
+For `d>0`, route `rational_ode_substitution` cites
+`RealRooted.ExponentialRows.insertionRow_splits_subst_of_rational_ode` and,
+when transferring directed weak interlacing,
+`insertionRow_interl_subst_of_rational_ode` in
+[SubstitutionRational.lean at b09ae7ff6](https://github.com/PerAlexandersson/RealRooted/blob/b09ae7ff6562bcaada3f998622737f7091feb9f3/RealRooted/ExponentialRows/SubstitutionRational.lean).
+It requires nonnegative parameters and structurally nonnegative unmarked/seed
+coefficients, with the unchanged unmarked series matching the seed route.
+The block-derivative coefficients
 satisfy `phi_(r+1)=(lambda+r*d)*phi_r+b*[r=1]`, starting at `phi_1=a`.
 For example, the following marked specification gives `-log(1-z)`:
 
@@ -241,9 +269,14 @@ For example, the following marked specification gives `-log(1-z)`:
  "a":"1", "b":"0", "lambda":"0", "d":"1"}
 ```
 
-The choice `lambda="1"` instead gives `z/(1-z)`. At `d=0` we use the theorem-backed
-ODE route, preserving the seed's evidence level. No paper closure is
-registered as a Lean theorem.
+The choice `lambda="1"` instead gives `z/(1-z)`. Expressions `-log(1-z)`
+and `z/(1-z)` recognize the same proved rational-ODE routes.
+At `d=0` we use the original ODE route. Every proved closure preserves the
+seed's evidence level: a paper-only premise keeps the resulting route at
+`paper_proof`. Directed weak interlacing transfers only with a cited
+interlacing theorem and a seed route that supplies it. Quartic splitness
+alone does not establish this premise. These reports check symbolic identities
+and theorem hypotheses in Rust; they do not replay Lean proofs.
 
 ## Finite-rank reference certificates
 

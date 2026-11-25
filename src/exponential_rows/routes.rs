@@ -6,6 +6,8 @@ use num_traits::Signed;
 
 const SUBSTITUTION:&str="https://github.com/PerAlexandersson/RealRooted/blob/main/RealRooted/ExponentialRows/Substitution.lean";
 const QUARTIC:&str="https://github.com/PerAlexandersson/RealRooted/blob/main/RealRooted/ExponentialRows/QuarticGrace.lean";
+const RATIONAL_SUBSTITUTION:&str="https://github.com/PerAlexandersson/RealRooted/blob/b09ae7ff6562bcaada3f998622737f7091feb9f3/RealRooted/ExponentialRows/SubstitutionRational.lean";
+const POWER_SUBSTITUTION:&str="https://github.com/PerAlexandersson/RealRooted/blob/b09ae7ff6562bcaada3f998622737f7091feb9f3/RealRooted/ExponentialRows/SubstitutionPowers.lean";
 const PAPER: &str = "https://github.com/PerAlexandersson/RealRooted/issues/2415";
 
 /// Evidence level; an exact finite certificate never becomes an all-rank theorem.
@@ -118,6 +120,54 @@ fn proved(
         premises: vec![],
         consecutive_weak_interlacing: interlacing,
     }
+}
+
+fn with_substitution_premise(
+    mut route: ExponentialRouteReport,
+    premise: ExponentialRouteReport,
+) -> ExponentialRouteReport {
+    if premise.evidence != ExponentialEvidenceLevel::TheoremBacked {
+        route.evidence = ExponentialEvidenceLevel::PaperProof;
+        route.status = "paper_proof".into();
+        route.statement.push_str(" The seed depends on an unreviewed paper argument; this closure does not upgrade its evidence level.");
+    }
+    route.premises.push(premise);
+    route
+}
+
+// These faces have closure theorems independent of the general PF outer
+// polynomial conjecture. In particular x^2+x^4 is not a PF polynomial.
+pub(super) fn polynomial_closure(p: &[Q]) -> Option<(&'static str, &'static str, &'static str)> {
+    let degree = vec_poly::degree(p).unwrap_or(0);
+    if degree.is_power_of_two()
+        && p[degree].is_one()
+        && p.iter()
+            .enumerate()
+            .skip(1)
+            .all(|(i, c)| i == degree || c.is_zero())
+    {
+        return Some((
+            "power_two_substitution",
+            "RealRooted.ExponentialRows.insertionRow_splits_pow_two_pow",
+            "RealRooted.ExponentialRows.insertionRow_interl_pow_two_pow",
+        ));
+    }
+    if degree <= 4
+        && p.iter().enumerate().skip(1).all(|(i, c)| {
+            if i == 2 || i == 4 {
+                !c.is_negative()
+            } else {
+                c.is_zero()
+            }
+        })
+    {
+        return Some((
+            "even_quartic_substitution",
+            "RealRooted.ExponentialRows.insertionRow_splits_even_quartic_subst",
+            "RealRooted.ExponentialRows.insertionRow_interl_even_quartic_subst",
+        ));
+    }
+    None
 }
 fn seed_route(
     family: &ExponentialFamily,
@@ -298,7 +348,7 @@ fn substitution_route(
             };
             return substitution_route(&normalized);
         }
-        if singleton(&family.unmarked)? != Some(Q::one())
+        if !nonnegative_series(&family.unmarked)?
             || [&a, &b, &l, &d].iter().any(|p| p.is_negative())
             || !nonnegative_series(seed)?
         {
@@ -312,23 +362,43 @@ fn substitution_route(
             return Ok(None);
         };
         let interlacing = premise.consecutive_weak_interlacing;
-        return Ok(Some(ExponentialRouteReport {
-            route:"rational_ode_substitution_paper".into(),evidence:ExponentialEvidenceLevel::PaperProof,status:"paper_proof".into(),
-            statement:format!("Unreviewed paper route: A=z, Phi(0)=0, (1-d*x)Phi'=a+b*x+lambda*Phi with a={a}, b={b}, lambda={l}, d={d} nonnegative; exact formal composition with the recognized seed. All-rank splitness and any recorded interlacing transfer are conditional on the cited paper argument. No Lean theorem for d>0 is claimed."),
-            references:vec!["https://github.com/PerAlexandersson/RealRooted/issues/2415#issuecomment-7141592218".into()],premises:vec![premise],consecutive_weak_interlacing:interlacing,
-        }));
+        let mut route = proved(
+            "rational_ode_substitution",
+            &format!("Exact formal composition Phi(B_seed), Phi(0)=0, (1-d*x)Phi'=a+b*x+lambda*Phi with a={a}, b={b}, lambda={l}, d={d} nonnegative. Nonnegative unmarked/seed coefficients checked structurally. All rows split by the seed route and rational-ODE substitution closure. Rust identity/hypothesis recognition is not a Lean replay."),
+            RATIONAL_SUBSTITUTION,
+            "RealRooted.ExponentialRows.insertionRow_splits_subst_of_rational_ode",
+            interlacing,
+        );
+        if interlacing {
+            route.references.push(
+                "RealRooted.ExponentialRows.insertionRow_interl_subst_of_rational_ode".into(),
+            );
+        }
+        return Ok(Some(with_substitution_premise(route, premise)));
     }
     if let BlockWeightSpec::PolynomialSubstitution { seed, coefficients } = &family.marked {
-        // The cited round-four paper argument is explicitly scoped to A=z.
         let p = coefficients
             .iter()
             .map(|c| rational(c))
             .collect::<Result<Vec<_>, _>>()?;
-        if singleton(&family.unmarked)? != Some(Q::one())
-            || vec_poly::degree(&p).is_none()
-            || !pf(&p)
-            || !nonnegative_series(seed)?
-        {
+        let closure = polynomial_closure(&p);
+        let paper_quartic = vec_poly::degree(&p).is_some_and(|d| d <= 4)
+            && p.iter().enumerate().skip(1).all(|(i, c)| {
+                if (2..=4).contains(&i) {
+                    !c.is_negative()
+                } else {
+                    c.is_zero()
+                }
+            });
+        // The remaining round-four paper routes are restricted to A=z.
+        let admissible = if closure.is_some() {
+            nonnegative_series(&family.unmarked)?
+        } else {
+            singleton(&family.unmarked)? == Some(Q::one())
+                && vec_poly::degree(&p).is_some()
+                && (paper_quartic || pf(&p))
+        };
+        if !admissible || !nonnegative_series(seed)? {
             return Ok(None);
         }
         let base = ExponentialFamily {
@@ -339,10 +409,27 @@ fn substitution_route(
             return Ok(None);
         };
         let interlacing = premise.consecutive_weak_interlacing;
+        if let Some((name, splits, interl)) = closure {
+            let statement = if name == "power_two_substitution" {
+                "Exact P(B_seed)-P(0)=B_seed^(2^k). Nonnegative unmarked/seed coefficients checked structurally. All rows split by the seed route and iterated-squaring closure."
+            } else {
+                "Exact P(B_seed)-P(0)=a*B_seed^2+c*B_seed^4 with a,c>=0. Nonnegative unmarked/seed coefficients checked structurally. All rows split by the seed route and even-quartic closure."
+            };
+            let mut route = proved(name, statement, POWER_SUBSTITUTION, splits, interlacing);
+            if interlacing {
+                route.references.push(interl.into());
+            }
+            return Ok(Some(with_substitution_premise(route, premise)));
+        }
+        let hypotheses = if paper_quartic {
+            "P(x)-P(0)=a*x^2+b*x^3+c*x^4 with a,b,c>=0 checked exactly"
+        } else {
+            "P is nonzero with positive leading coefficient and only real nonpositive zeros (checked exactly using nonnegative coefficients and root counts)"
+        };
         return Ok(Some(ExponentialRouteReport {
             route:"polynomial_substitution_paper".into(),evidence:ExponentialEvidenceLevel::PaperProof,status:"paper_proof".into(),
-            statement:"Paper proof route, not yet reviewed or formalized: A=z, exact P(B_seed)-P(0); P is nonzero with positive leading coefficient and only real nonpositive zeros (checked exactly using nonnegative coefficients and root counts). All-rank splitness follows conditional on the cited paper argument. No Lean closure theorem is claimed.".into(),
-            references:vec!["https://github.com/PerAlexandersson/RealRooted/issues/2415#issuecomment-7141592218".into()],premises:vec![premise],consecutive_weak_interlacing:interlacing,
+            statement:format!("Paper proof route, not yet reviewed or formalized: A=z, exact P(B_seed)-P(0); {hypotheses}. All-rank splitness follows conditional on the cited paper argument. No Lean closure theorem or interlacing transfer is claimed."),
+            references:vec!["https://github.com/PerAlexandersson/RealRooted/issues/2415#issuecomment-7141592218".into()],premises:vec![premise],consecutive_weak_interlacing:false,
         }));
     }
     let (inner, a, b, l) = match &family.marked {
@@ -407,13 +494,7 @@ fn substitution_route(
             .references
             .push("RealRooted.ExponentialRows.insertionRow_interl_subst".into());
     }
-    if premise.evidence != ExponentialEvidenceLevel::TheoremBacked {
-        route.evidence = ExponentialEvidenceLevel::PaperProof;
-        route.status = "paper_proof".into();
-        route.statement.push_str(" The seed depends on an unreviewed paper argument; this closure does not upgrade its evidence level.");
-    }
-    route.premises.push(premise);
-    Ok(Some(route))
+    Ok(Some(with_substitution_premise(route, premise)))
 }
 fn nonnegative_series(spec: &BlockWeightSpec) -> Result<bool, ExponentialRowError> {
     Ok(match spec {

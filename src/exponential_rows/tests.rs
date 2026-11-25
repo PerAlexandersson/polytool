@@ -413,7 +413,7 @@ fn finite_coefficient_specs_recognize_full_quadratic_identities() {
 }
 
 #[test]
-fn rational_ode_alternative_is_exact_and_explicitly_paper_evidence() {
+fn rational_ode_closure_is_exact_and_theorem_backed() {
     for (lambda, geometric) in [("0", false), ("1", true)] {
         let spec = BlockWeightSpec::RationalOdeSubstitution {
             seed: Box::new(sizes(&[1])),
@@ -434,8 +434,10 @@ fn rational_ode_alternative_is_exact_and_explicitly_paper_evidence() {
             marked: spec,
         };
         let routes = exponential_row_routes(&f).unwrap();
-        assert_eq!(routes[0].route, "rational_ode_substitution_paper");
-        assert_eq!(routes[0].evidence, ExponentialEvidenceLevel::PaperProof);
+        assert_eq!(routes[0].route, "rational_ode_substitution");
+        assert_eq!(routes[0].evidence, ExponentialEvidenceLevel::TheoremBacked);
+        assert_eq!(routes[0].status, "proved");
+        assert!(routes[0].consecutive_weak_interlacing);
         let report = check_exponential_rows(&request(
             f,
             (0..=8).collect(),
@@ -581,7 +583,7 @@ fn series_expression_acceptance_and_sparse_equivalence() {
             let routes = exponential_row_routes(&f).unwrap();
             assert_eq!(
                 routes[0].evidence,
-                ExponentialEvidenceLevel::PaperProof,
+                ExponentialEvidenceLevel::TheoremBacked,
                 "{b}"
             );
         } else if !b.contains("z^2/2") || a == "z" {
@@ -619,6 +621,187 @@ fn series_expression_acceptance_and_sparse_equivalence() {
         .row(8)
         .unwrap()
     );
+}
+
+#[test]
+fn proved_substitution_faces_cite_pinned_splitness_and_interlacing_theorems() {
+    for (outer, route, splits, interlacing) in [
+        (
+            "x/(1-x)",
+            "rational_ode_substitution",
+            "insertionRow_splits_subst_of_rational_ode",
+            "insertionRow_interl_subst_of_rational_ode",
+        ),
+        (
+            "-log(1-x)",
+            "rational_ode_substitution",
+            "insertionRow_splits_subst_of_rational_ode",
+            "insertionRow_interl_subst_of_rational_ode",
+        ),
+        (
+            "x^2",
+            "power_two_substitution",
+            "insertionRow_splits_pow_two_pow",
+            "insertionRow_interl_pow_two_pow",
+        ),
+        (
+            "x^4",
+            "power_two_substitution",
+            "insertionRow_splits_pow_two_pow",
+            "insertionRow_interl_pow_two_pow",
+        ),
+        (
+            "x^8",
+            "power_two_substitution",
+            "insertionRow_splits_pow_two_pow",
+            "insertionRow_interl_pow_two_pow",
+        ),
+        (
+            "x^2+x^4",
+            "even_quartic_substitution",
+            "insertionRow_splits_even_quartic_subst",
+            "insertionRow_interl_even_quartic_subst",
+        ),
+        (
+            "2*x^2+3*x^4",
+            "even_quartic_substitution",
+            "insertionRow_splits_even_quartic_subst",
+            "insertionRow_interl_even_quartic_subst",
+        ),
+    ] {
+        // The exponential seed has a theorem-backed consecutive-interlacing route.
+        let f = ExponentialFamily {
+            unmarked: sizes(&[1]),
+            marked: expression(&format!("compose({outer},exp(z)-1)")),
+        };
+        let report = check_exponential_rows(&request(
+            f,
+            (0..=10).collect(),
+            ExponentialRowCheck::Interlacing,
+        ))
+        .unwrap();
+        let r = &report.routes[0];
+        assert_eq!(r.route, route, "{outer}");
+        assert_eq!(
+            r.evidence,
+            ExponentialEvidenceLevel::TheoremBacked,
+            "{outer}"
+        );
+        assert_eq!(r.status, "proved");
+        assert!(r.consecutive_weak_interlacing, "{outer}");
+        assert!(r.references[0].contains("/blob/b09ae7ff6562bcaada3f998622737f7091feb9f3/"));
+        for declaration in [splits, interlacing] {
+            assert!(r
+                .references
+                .contains(&["RealRooted", "ExponentialRows", declaration].join(".")));
+        }
+        assert!(report.first_failure.is_none(), "{outer}");
+    }
+    for power in [2, 4, 8] {
+        let routes = exponential_row_routes(&ExponentialFamily {
+            unmarked: sizes(&[1]),
+            marked: expression(&format!("(exp(z)-1)^{power}")),
+        })
+        .unwrap();
+        assert_eq!(routes[0].route, "power_two_substitution");
+        assert!(routes[0].consecutive_weak_interlacing);
+    }
+    // Finite monomials retain their support for the separate necessity route.
+    let routes = exponential_row_routes(&ExponentialFamily {
+        unmarked: sizes(&[2]),
+        marked: expression("z^7"),
+    })
+    .unwrap();
+    assert_eq!(routes[0].route, "single_marked_size_divisibility");
+    assert_eq!(routes[0].status, "obstruction");
+}
+
+#[test]
+fn substitution_closures_preserve_seed_evidence_and_interlacing_scope() {
+    let polynomial = |seed, coefficients: &[&str]| BlockWeightSpec::PolynomialSubstitution {
+        seed: Box::new(seed),
+        coefficients: coefficients.iter().map(|c| c.to_string()).collect(),
+    };
+    let paper_seed = polynomial(sizes(&[1]), &["0", "0", "0", "1"]);
+    for coefficients in [
+        vec![],
+        vec!["0"],
+        vec!["-7"],
+        vec!["-7", "0", "0", "0", "2"],
+        vec!["0", "0", "2", "0", "0"],
+    ] {
+        let routes = exponential_row_routes(&ExponentialFamily {
+            unmarked: sizes(&[1]),
+            marked: polynomial(sizes(&[1]), &coefficients),
+        })
+        .unwrap();
+        assert_eq!(routes[0].route, "even_quartic_substitution");
+        assert_eq!(routes[0].evidence, ExponentialEvidenceLevel::TheoremBacked);
+        assert!(routes[0].consecutive_weak_interlacing);
+    }
+    for marked in [
+        paper_seed.clone(),
+        polynomial(sizes(&[1]), &["0", "0", "1", "3", "1"]),
+        polynomial(paper_seed.clone(), &["0", "0", "0", "0", "1"]),
+        polynomial(paper_seed.clone(), &["0", "0", "1", "0", "1"]),
+        BlockWeightSpec::RationalOdeSubstitution {
+            seed: Box::new(paper_seed),
+            a: "1".into(),
+            b: "0".into(),
+            lambda: "1".into(),
+            d: "1".into(),
+        },
+    ] {
+        let routes = exponential_row_routes(&ExponentialFamily {
+            unmarked: sizes(&[1]),
+            marked,
+        })
+        .unwrap();
+        assert_eq!(routes[0].evidence, ExponentialEvidenceLevel::PaperProof);
+        assert_eq!(routes[0].status, "paper_proof");
+    }
+    for outer in ["x/(1-x)", "x^4", "x^2+x^4"] {
+        let routes = exponential_row_routes(&ExponentialFamily {
+            unmarked: sizes(&[1]),
+            marked: expression(&format!("compose({outer},z^2+z^3)")),
+        })
+        .unwrap();
+        assert_eq!(routes[0].evidence, ExponentialEvidenceLevel::TheoremBacked);
+        assert!(!routes[0].consecutive_weak_interlacing);
+        assert!(!routes[0]
+            .references
+            .iter()
+            .any(|s| s.contains(".insertionRow_interl_")));
+    }
+    // The new theorems also permit non-unit singleton A, including zero rows.
+    for outer in ["x/(1-x)", "x^4", "x^2+x^4"] {
+        for a in ["0", "2*z"] {
+            let routes = exponential_row_routes(&ExponentialFamily {
+                unmarked: expression(a),
+                marked: expression(&format!("compose({outer},z)")),
+            })
+            .unwrap();
+            assert_eq!(routes[0].evidence, ExponentialEvidenceLevel::TheoremBacked);
+        }
+    }
+    for outer in ["x^3", "x^6", "x^2+3*x^3+x^4", "x^2+x^3+x^4"] {
+        let routes = exponential_row_routes(&ExponentialFamily {
+            unmarked: sizes(&[1]),
+            marked: expression(&format!("compose({outer},exp(z)-1)")),
+        })
+        .unwrap();
+        assert_eq!(routes[0].route, "polynomial_substitution_paper");
+        assert_eq!(routes[0].evidence, ExponentialEvidenceLevel::PaperProof);
+        assert!(!routes[0].consecutive_weak_interlacing);
+    }
+    for outer in ["-x^2+x^4", "x^2-x^4", "x^2+x^4+x^6"] {
+        assert!(exponential_row_routes(&ExponentialFamily {
+            unmarked: sizes(&[1]),
+            marked: expression(&format!("compose({outer},exp(z)-1)")),
+        })
+        .unwrap()
+        .is_empty());
+    }
 }
 #[test]
 fn expressions_check_full_identities_and_sign_hypotheses() {

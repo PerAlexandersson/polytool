@@ -378,13 +378,24 @@ fn recognize(e: &Expr) -> Option<BlockWeightSpec> {
     let finite = finite_polynomial(e);
     // Prefer the primitive low-degree seed when the whole identity already
     // reduces to it; otherwise retain an explicit substitution witness.
-    if let Some(p) = finite.as_ref().filter(|p| p.len() <= 5 && p[0].is_zero()) {
+    if let Some(p) = finite
+        .as_ref()
+        .filter(|p| !matches!(e, Expr::Compose(_, _)) && p.len() <= 5 && p[0].is_zero())
+    {
         return Some(finite_spec(p));
     }
     // Preserve the supplied composition before polynomial expansion, which
     // would otherwise discard the polynomial-substitution proof witness.
     if let Expr::Compose(outer, inner) = e {
         let seed = recognize(inner)?;
+        if let Some(p) = finite_polynomial(outer) {
+            if super::routes::polynomial_closure(&p).is_some() {
+                return Some(BlockWeightSpec::PolynomialSubstitution {
+                    seed: Box::new(seed),
+                    coefficients: p.iter().map(ToString::to_string).collect(),
+                });
+            }
+        }
         if let Some(spec) = ode(outer, seed.clone()) {
             return Some(spec);
         }
@@ -392,6 +403,19 @@ fn recognize(e: &Expr) -> Option<BlockWeightSpec> {
             return Some(BlockWeightSpec::PolynomialSubstitution {
                 seed: Box::new(seed),
                 coefficients: p.iter().map(ToString::to_string).collect(),
+            });
+        }
+    }
+    // Retain non-polynomial powers' seeds. Finite expressions keep their
+    // support, which is also needed by the independent divisibility filter.
+    if let Expr::Power(inner, n) = e {
+        if finite.is_none() && *n > 0 && *n <= DEGREE {
+            let seed = recognize(inner)?;
+            let mut coefficients = vec!["0".to_string(); n + 1];
+            coefficients[*n] = "1".into();
+            return Some(BlockWeightSpec::PolynomialSubstitution {
+                seed: Box::new(seed),
+                coefficients,
             });
         }
     }

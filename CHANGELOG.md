@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Upgrade `exp-rows` rational-ODE substitution, powers `B^(2^k)` and nonnegative
+  even-quartic substitution `a*B^2+c*B^4` to theorem-backed closure routes,
+  with exact declarations and public permalinks pinned to RealRooted commit
+  `b09ae7ff6`. Transfer directed weak interlacing only with the cited theorem
+  and a suitable seed; retain paper evidence for paper-dependent premises.
+  General PF outer-polynomial substitution, arbitrary powers such as `B^3`,
+  and full quartic substitution remain paper-only, without interlacing claims.
+
 - Add a curated sequence-family catalog over the existing OEIS generators, with
   strict JSON sidecars, public commit-pinned Lean attestations, exact row replay
   and two conjectural complete-graph packing families.
@@ -25,8 +33,8 @@
   bounded MCP `generate_exponential_rows` expose in-process roots/interlacing,
   first-failure certificates and exact replay.
 - Add symbolic nonnegative seed/ODE-substitution routes, paper divisibility
-  obstruction filters (k=8 explicitly under review), an explicitly unreviewed
-  paper routes for polynomial substitution and the rational ODE extension,
+  obstruction filters (k=8 explicitly under review), explicitly unreviewed
+  paper routes for general PF polynomial substitution,
   and exact per-rank
   multiplier-symbol and one-free-factor pencil evidence. Finite certificates
   make no all-rank claim. See [the guide](doc/cli-exp-rows.md).

@@ -214,7 +214,7 @@ mod rational_ode_tests {
     use rmcp::{handler::server::wrapper::Parameters, Json};
     use serde_json::json;
     #[test]
-    fn rational_ode_is_bounded_and_never_labelled_as_a_lean_theorem() {
+    fn rational_ode_is_bounded_and_theorem_backed() {
         let server = PolynomialToolsServer::new();
         let mut request = json!({"family":{"unmarked":{"kind":"sizes","sizes":[1]},"marked":{"kind":"rational_ode_substitution","seed":{"kind":"sizes","sizes":[1]},"a":"1","b":"0","lambda":"0","d":"1"}},"rows":[6,8],"check":"real_rooted"});
         let Json(report) = server
@@ -222,7 +222,8 @@ mod rational_ode_tests {
                 request: request.clone(),
             }))
             .unwrap();
-        assert_eq!(report["routes"][0]["evidence"], "paper_proof");
+        assert_eq!(report["routes"][0]["evidence"], "theorem_backed");
+        assert_eq!(report["routes"][0]["status"], "proved");
         assert!(report["first_failure"].is_null());
         request["rows"] = json!([129]);
         request["check"] = json!("none");
@@ -243,7 +244,7 @@ mod expression_tests {
             request: request.clone(),
         })
         .unwrap();
-        assert_eq!(report["routes"][0]["evidence"], "paper_proof");
+        assert_eq!(report["routes"][0]["evidence"], "theorem_backed");
         assert!(report["first_failure"].is_null());
         for b in [
             "z^65",
