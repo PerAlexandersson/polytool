@@ -1687,8 +1687,8 @@ fn brenti_recognition_certifies_stirling_and_rejects_eulerian() {
         weight: weight.to_string(),
     };
     assert_eq!(digraph.outgoing[0], vec![edge(1, 1)]);
-    for y in 1..5 {
-        assert_eq!(digraph.outgoing[y], vec![edge(y, y), edge(y + 1, 1)]);
+    for (y, outgoing) in digraph.outgoing.iter().enumerate().take(5).skip(1) {
+        assert_eq!(*outgoing, vec![edge(y, y), edge(y + 1, 1)]);
     }
 
     let Json(eulerian) = server
