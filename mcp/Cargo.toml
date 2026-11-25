@@ -20,6 +20,10 @@ path = "src/main.rs"
 rust_2018_idioms = { level = "warn", priority = -1 }
 unsafe_code = "forbid"
 
+# Index loops over matrix and digraph entries are the clearest form here.
+[lints.clippy]
+needless_range_loop = "allow"
+
 [features]
 # Expensive exact BKW certification regressions; small tool checks stay default.
 full-tests = []
