@@ -240,7 +240,7 @@ pub fn check_weak_interlacing_bigint_coeffs(p: &[BigInt], q: &[BigInt]) -> Optio
 /// | `deg g = deg f + 1` | `f ≪ g` |
 /// | `deg f = deg g + 1` | `g ≪ f` |
 /// | `deg f = deg g` | `f ≪ g` **or** `g ≪ f` |
-/// | `|deg f - deg g| ≥ 2` | never (`false`) |
+/// | `\|deg f - deg g\| ≥ 2` | never (`false`) |
 ///
 /// The zero polynomial interlaces every real-rooted polynomial (in both
 /// orders), so `interlaces_either_order(0, g) == is_real_rooted(g)` and
