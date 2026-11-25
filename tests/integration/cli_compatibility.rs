@@ -48,6 +48,52 @@ const fn frozen(
 /// The invocations listed as frozen in the CLI usability plan.
 const FROZEN: &[Frozen] = &[
     frozen(
+        "exp-rows-coefficient-signs",
+        &[
+            "exp-rows",
+            "--unmarked",
+            "z-z^3",
+            "--marked",
+            "z",
+            "--rows",
+            "3",
+        ],
+        Stdin::None,
+        0,
+    ),
+    frozen(
+        "exp-rows-first-failure",
+        &[
+            "exp-rows",
+            "--unmarked",
+            "z",
+            "--marked",
+            "z^2*(1+z^4)",
+            "--rows",
+            "6",
+            "--check",
+            "first-failure",
+        ],
+        Stdin::None,
+        1,
+    ),
+    frozen(
+        "exp-rows-interlacing-failure",
+        &[
+            "exp-rows",
+            "--unmarked",
+            "weights:1,5",
+            "--marked",
+            "weights:1,4",
+            "--rows",
+            "1,2",
+            "--check",
+            "interlacing",
+        ],
+        Stdin::None,
+        1,
+    ),
+    frozen(
         "real-rooted",
         &["real-rooted"],
         Stdin::File("mixed-roots.txt"),

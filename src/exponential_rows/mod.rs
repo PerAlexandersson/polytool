@@ -1,7 +1,8 @@
 //! Exact rows `n! [z^n] exp(A(z) + t B(z))` for labelled weighted blocks.
 //!
-//! [`BlockWeightSpec`] describes factorial-normalized block weights, not
-//! ordinary power-series coefficients. [`ExponentialFamily::rows_iter`] uses
+//! Structured [`BlockWeightSpec`] variants describe factorial-normalized block
+//! weights. Its expression variant uses ordinary series coefficients, converted
+//! to block weights exactly. [`ExponentialFamily::rows_iter`] uses
 //! the insertion recurrence; [`ExponentialFamily::row`] extracts a sparse row
 //! without constructing earlier polynomial rows (a closed form for a single
 //! marked size). [`check_exponential_rows`] streams into the existing exact
@@ -10,6 +11,7 @@
 //! and substitutions; it never infers a series identity from a finite prefix.
 
 mod checks;
+mod expression_routes;
 mod routes;
 #[cfg(test)]
 mod tests;
@@ -46,6 +48,11 @@ pub(super) fn strings(row: &[Q]) -> Vec<String> {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum BlockWeightSpec {
+    /// Ordinary formal series expression, evaluated only to the requested rank.
+    SeriesExpression {
+        /// Exact expression in `z` (or `x`); constant term must be zero.
+        expression: String,
+    },
     /// Finite weights `[w_1, w_2, ...]`; missing sizes have weight zero.
     Finite {
         /// Exact rational strings, starting at size one.
@@ -114,6 +121,18 @@ impl BlockWeightSpec {
             return Err(ExponentialRowError("substitution depth exceeds 16".into()));
         }
         match self {
+            Self::SeriesExpression { expression } => {
+                let parsed = crate::power_series::SeriesExpression::parse(expression)
+                    .map_err(|e| ExponentialRowError(e.to_string()))?;
+                let value = parsed
+                    .evaluate(0)
+                    .map_err(|e| ExponentialRowError(e.to_string()))?;
+                if !value.coefficients()[0].is_zero() {
+                    return Err(ExponentialRowError(
+                        "block series requires zero constant term".into(),
+                    ));
+                }
+            }
             Self::Finite { weights } => {
                 for w in weights {
                     rational(w)?;
@@ -161,6 +180,14 @@ impl BlockWeightSpec {
         }
         let mut out = vec![Q::zero(); n + 1];
         match self {
+            Self::SeriesExpression { expression } => {
+                let series = crate::power_series::SeriesExpression::parse(expression)
+                    .and_then(|e| e.evaluate(n))
+                    .map_err(|e| ExponentialRowError(e.to_string()))?;
+                for (r, (w, c)) in out.iter_mut().zip(series.coefficients()).enumerate() {
+                    *w = c * Q::from_integer(factorial_bigint(r));
+                }
+            }
             Self::Finite { weights } => {
                 for (i, w) in weights.iter().take(n).enumerate() {
                     out[i + 1] = rational(w)?;
@@ -265,13 +292,13 @@ fn truncated_product(a: &[Q], b: &[Q], n: usize) -> Vec<Q> {
     out
 }
 
-/// Exact labelled-block exponential family; `A(0)=B(0)=0` is enforced by shape.
+/// Exact labelled-block exponential family; `A(0)=B(0)=0` is checked before generation.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ExponentialFamily {
-    /// Factorial-normalized weights of unmarked blocks.
+    /// Unmarked block series A, in the normalization specified by its variant.
     pub unmarked: BlockWeightSpec,
-    /// Factorial-normalized weights of marked blocks.
+    /// Marked block series B, in the normalization specified by its variant.
     pub marked: BlockWeightSpec,
 }
 impl ExponentialFamily {

@@ -14,6 +14,34 @@ See the [README](../README.md#using-as-a-crate) for a short quick start.  This p
 collects the longer library examples; the command-line interface is described in
 [cli.md](cli.md).
 
+## Exact rational power series
+
+`power_series::{TruncatedSeries, SeriesExpression, SeriesExpressionLimits,
+SeriesError}` supplies precision-aware rational arithmetic and a reusable parser.
+`TruncatedSeries::new` takes ordinary ascending coefficients including the
+constant term. `order()` is the known coefficient count: length 5 means modulo
+`z^5`, even if trailing coefficients are zero. Binary operations use the smaller
+order; `truncate` never extends precision; `derivative` loses one coefficient.
+Methods include `add`, `subtract`, `multiply`, `scale`, `power`, `inverse`,
+`exponential`, `logarithm`, and zero-inner-constant `compose`.
+
+```rust
+use polytool::power_series::SeriesExpression;
+let series = SeriesExpression::parse("exp(z)-1-z")?.evaluate(6)?;
+assert_eq!(series.order(), 7);
+assert_eq!(series.coefficients()[2].to_string(), "1/2");
+# Ok::<(), polytool::power_series::SeriesError>(())
+```
+
+`SeriesExpression::evaluate(n)` returns ordinary coefficients through degree n
+inclusive, with exact derivative lookahead. `parse_with_limits` and
+`evaluate_with_limits` enforce caller-supplied limits. See the
+[expression grammar](cli-exp-rows.md#exact-series-expressions) for functions,
+normalizations, domain restrictions, and default bounds. To use a series as a
+block generator, construct `exponential_rows::BlockWeightSpec::SeriesExpression
+{ expression: "exp(z)-1".into() }`; the row library converts ordinary
+coefficients into factorial-normalized weights exactly.
+
 ## Interlacing refinement discovery
 
 `recurrence::{discover_interlacing_refinements, verify_interlacing_refinements}`

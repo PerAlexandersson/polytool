@@ -7,7 +7,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let request = ExponentialRowsRequest {
         family: ExponentialFamily {
             unmarked: BlockWeightSpec::Sizes { sizes: vec![1, 2] },
-            marked: BlockWeightSpec::Tail { minimum: 3 },
+            marked: BlockWeightSpec::SeriesExpression {
+                expression: "exp(z)-1-z-z^2/2".into(),
+            },
         },
         rows: vec![6, 9, 12],
         check: ExponentialRowCheck::RealRooted,

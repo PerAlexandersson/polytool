@@ -115,7 +115,7 @@ combines the guides, generated CLI reference and rustdoc into a static site.
 
 | Command | Purpose |
 | --- | --- |
-| `exp-rows` | Exact exponential-family rows, in-process checks and symbolic proof routes; [guide](doc/cli-exp-rows.md) |
+| `exp-rows` | Exact exponential-family rows from series expressions, in-process checks and symbolic routes; [guide](doc/cli-exp-rows.md) |
 
 Polynomials are read from standard input, one per line, as comma-separated
 integer coefficients in ascending degree order (`1, 11, 11, 1` is

@@ -142,6 +142,10 @@ fn failure(
 /// Finite report; only theorem-backed route entries make all-rank statements.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ExponentialRowsReport {
+    /// Expression sign hypotheses and negative witnesses; finite prefixes
+    /// never supply an all-coefficient nonnegativity proof.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub coefficient_signs: Vec<CoefficientSignReport>,
     /// Stable schema identifier.
     pub schema: String,
     /// Embedded exact request, for reproduction.
@@ -200,6 +204,7 @@ pub fn check_exponential_rows(
         )
     };
     let mut report = ExponentialRowsReport {
+        coefficient_signs: super::routes::coefficient_signs(&request.family, max_n)?,
         schema: "polytool.exp-rows.v1".into(),
         request: request.clone(),
         rows: vec![],

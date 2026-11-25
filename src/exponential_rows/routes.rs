@@ -417,6 +417,14 @@ fn substitution_route(
 }
 fn nonnegative_series(spec: &BlockWeightSpec) -> Result<bool, ExponentialRowError> {
     Ok(match spec {
+        BlockWeightSpec::SeriesExpression { expression } => {
+            let parsed = crate::power_series::SeriesExpression::parse(expression)
+                .map_err(|e| ExponentialRowError(e.to_string()))?;
+            super::expression_routes::recognize_expression(&parsed)
+                .map(|s| nonnegative_series(&s))
+                .transpose()?
+                .unwrap_or(false)
+        }
         BlockWeightSpec::Finite { .. } | BlockWeightSpec::Sizes { .. } => nonnegative_finite(spec)?,
         BlockWeightSpec::Tail { .. } => true,
         BlockWeightSpec::Exponential { scale, rate, .. } => {
@@ -501,6 +509,11 @@ pub fn exponential_row_routes(
 ) -> Result<Vec<ExponentialRouteReport>, ExponentialRowError> {
     family.unmarked.validate(0)?;
     family.marked.validate(0)?;
+    let normalized = ExponentialFamily {
+        unmarked: normalize(&family.unmarked)?,
+        marked: normalize(&family.marked)?,
+    };
+    let family = &normalized;
     let mut routes = Vec::new();
     if let Some(route) = substitution_route(family)? {
         routes.push(route);
@@ -522,6 +535,74 @@ pub fn exponential_row_routes(
     }
 
     Ok(routes)
+}
+
+fn normalize(spec: &BlockWeightSpec) -> Result<BlockWeightSpec, ExponentialRowError> {
+    let mut spec = spec.clone();
+    match &mut spec {
+        BlockWeightSpec::SeriesExpression { expression } => {
+            let parsed = crate::power_series::SeriesExpression::parse(expression)
+                .map_err(|e| ExponentialRowError(e.to_string()))?;
+            if let Some(recognized) = super::expression_routes::recognize_expression(&parsed) {
+                return Ok(recognized);
+            }
+        }
+        BlockWeightSpec::PolynomialSubstitution { seed, .. }
+        | BlockWeightSpec::OdeSubstitution { seed, .. }
+        | BlockWeightSpec::RationalOdeSubstitution { seed, .. } => {
+            **seed = normalize(seed)?;
+        }
+        _ => {}
+    }
+    Ok(spec)
+}
+
+/// Coefficient-sign hypotheses for one series. A nonnegative prefix alone
+/// does not certify nonnegativity of the infinite series.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CoefficientSignReport {
+    /// `unmarked` for A or `marked` for B.
+    pub series: String,
+    /// `nonnegative` (structural proof), `negative` (witness), or `unknown`.
+    pub status: String,
+    /// Inclusive rank inspected exactly, even when only selected rows are checked.
+    pub checked_through: usize,
+    /// First negative coefficient in the inspected prefix, if present.
+    pub first_negative_degree: Option<usize>,
+    /// Ordinary coefficient of the negative witness, if present.
+    pub first_negative_coefficient: Option<String>,
+}
+
+pub(super) fn coefficient_signs(
+    family: &ExponentialFamily,
+    n: usize,
+) -> Result<Vec<CoefficientSignReport>, ExponentialRowError> {
+    let mut out = Vec::new();
+    for (name, spec) in [("unmarked", &family.unmarked), ("marked", &family.marked)] {
+        let weights = spec.block_weights(n)?;
+        let negative = weights.iter().enumerate().find(|(_, c)| c.is_negative());
+        let proven = nonnegative_series(&normalize(spec)?)?;
+        // Preserve reports for existing positive structured inputs; expression
+        // hypotheses and any actual failed sign condition are explicit.
+        if negative.is_some() || matches!(spec, BlockWeightSpec::SeriesExpression { .. }) {
+            out.push(CoefficientSignReport {
+                series: name.into(),
+                status: if negative.is_some() {
+                    "negative"
+                } else if proven {
+                    "nonnegative"
+                } else {
+                    "unknown"
+                }
+                .into(),
+                checked_through: n,
+                first_negative_degree: negative.map(|(r, _)| r),
+                first_negative_coefficient: negative
+                    .map(|(r, c)| (c / Q::from_integer(factorial_bigint(r))).to_string()),
+            });
+        }
+    }
+    Ok(out)
 }
 
 /// Optional factorization of a reference row for a one-free-factor pencil.

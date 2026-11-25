@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add `power_series::{TruncatedSeries, SeriesExpression, SeriesExpressionLimits,
+  SeriesError}` for exact rational truncated arithmetic, exp/log/inverse,
+  composition, differentiation, polynomial truncation, and a bounded parser.
+  `exp-rows` and MCP accept `series_expression` block specs and ordinary or
+  exponential inline coefficient lists. Full symbolic identities recognize
+  existing seed/substitution routes; optional `coefficient_signs` diagnostics
+  distinguish structural nonnegativity, negative witnesses, and unknown signs.
+  Generation and finite root checks continue to allow negative coefficients.
+
 - Add exact exponential-family block-weight generators with dense streaming,
   sparse extraction and single-marked-size closed forms; CLI `exp-rows` and
   bounded MCP `generate_exponential_rows` expose in-process roots/interlacing,

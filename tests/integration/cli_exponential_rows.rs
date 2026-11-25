@@ -95,3 +95,81 @@ fn json_input_pencil_and_invalid_requests() {
     let v: Value = serde_json::from_slice(&result.stdout).unwrap();
     assert!(v["interlacing"].as_array().unwrap().is_empty());
 }
+
+#[test]
+fn expression_flags_normalizations_errors_and_replay() {
+    for (a, b) in [
+        ("0", "exp(z)-1"),
+        ("z", "log(1/(1-z))"),
+        ("z", "1/(1-z)-1"),
+        ("z", "compose(exp(x)-1-x,z^2)"),
+        ("coeffs:[0,1]", "coeffs:exponential:[0,0,1]"),
+    ] {
+        let output = run(
+            &[
+                "exp-rows",
+                "--unmarked",
+                a,
+                "--marked",
+                b,
+                "--rows",
+                "0..=8",
+                "--json",
+            ],
+            "",
+        );
+        assert!(
+            output.status.success(),
+            "{b}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["rows"][0]["coefficients"], json!(["1"]));
+        let replay = run(
+            &["exp-rows", "--verify", "--input", "-", "--json"],
+            &report.to_string(),
+        );
+        assert!(
+            replay.status.success(),
+            "{b}: {}",
+            String::from_utf8_lossy(&replay.stderr)
+        );
+    }
+    let output = run(
+        &[
+            "exp-rows",
+            "--unmarked",
+            "z",
+            "--marked",
+            "z^2*(1+z^4)",
+            "--rows",
+            "0..=8",
+            "--check",
+            "first-failure",
+            "--json",
+        ],
+        "",
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["first_failure"]["index"], 6);
+    let signs = run(
+        &[
+            "exp-rows",
+            "--unmarked",
+            "z-z^2/3",
+            "--marked",
+            "z",
+            "--rows",
+            "3",
+        ],
+        "",
+    );
+    assert!(signs.status.success());
+    assert!(String::from_utf8_lossy(&signs.stdout).contains("coefficient signs: negative"));
+    for b in ["exp(z", "log(z)", "1+z", "z^-2", "compose(z,1+z)"] {
+        let output = run(&["exp-rows", "--marked", b, "--rows", "2", "--json"], "");
+        assert_eq!(output.status.code(), Some(2), "{b}");
+        assert!(!output.stderr.is_empty());
+    }
+}

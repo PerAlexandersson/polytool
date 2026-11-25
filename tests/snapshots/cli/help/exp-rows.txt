@@ -10,7 +10,7 @@ success is not an all-rank proof.
 Usage: polytool exp-rows [OPTIONS]
 
 Options:
-      --unmarked <SPEC>   none, sizes:1,2, weights:1,1/2, tail:2, or JSON block spec [default: none]
+      --unmarked <SPEC>   none, sizes:1,2, weights:1,1/2, tail:2, exact expression, or JSON block spec [default: none]
       --marked <SPEC>     Marked block specification in the same syntax
       --rows <INDICES>    Increasing ranks: 0..=80 or 304,305,1000
       --check <PROPERTY>  Finite check [default: none] [possible values: none, real-rooted, interlacing, first-failure]
@@ -24,12 +24,14 @@ Input and output:
       --json             Emit machine-readable JSON (same as --format json)
 
 Details:
-  JSON schema polytool.exp-rows.v1. Weights start at size one; all rational
-  numbers are exact strings. Zero rows and constants are real-rooted. Interlacing
-  records both orientations for adjacent selected ranks only; either orientation
-  passes. A failure includes integer coefficients, square-free part and distinct
-  PRS root count. First-failure stops at the first selected failure. JSON requests
-  can include finite_rank reference rows with optional pencil factorizations. See
+  JSON schema polytool.exp-rows.v1. Weights start at size one; expressions use
+  ordinary powers and coeffs:[...] includes the constant slot. Functions: exp,
+  log, inv, compose, trunc, derivative. All rational numbers are exact strings.
+  Zero rows and constants are real-rooted. Interlacing records both orientations
+  for adjacent selected ranks only; either orientation passes. A failure includes
+  integer coefficients, square-free part and distinct PRS root count.
+  First-failure stops at the first selected failure. JSON requests can include
+  finite_rank reference rows with optional pencil factorizations. See
   doc/cli-exp-rows.md.
 
 Examples:

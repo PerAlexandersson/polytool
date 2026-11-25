@@ -502,3 +502,213 @@ fn divisibility_filter_handles_infinite_unmarked_supports_exactly() {
         "necessary_condition_passed"
     );
 }
+
+fn expression(s: &str) -> BlockWeightSpec {
+    BlockWeightSpec::SeriesExpression {
+        expression: s.into(),
+    }
+}
+#[test]
+fn series_expression_acceptance_and_sparse_equivalence() {
+    for (a, b, structured) in [
+        (
+            "0",
+            "exp(z)-1",
+            ExponentialFamily {
+                unmarked: sizes(&[]),
+                marked: BlockWeightSpec::Tail { minimum: 1 },
+            },
+        ),
+        (
+            "z+z^2/2",
+            "exp(z)-1-z-z^2/2",
+            ExponentialFamily {
+                unmarked: sizes(&[1, 2]),
+                marked: BlockWeightSpec::Tail { minimum: 3 },
+            },
+        ),
+        ("z", "z^2/2", family(&[1], &[2])),
+        (
+            "z",
+            "z^2+2*z^3+z^4/3",
+            ExponentialFamily {
+                unmarked: sizes(&[1]),
+                marked: BlockWeightSpec::Finite {
+                    weights: vec!["0".into(), "2".into(), "12".into(), "8".into()],
+                },
+            },
+        ),
+        (
+            "z",
+            "log(1/(1-z))",
+            ExponentialFamily {
+                unmarked: sizes(&[1]),
+                marked: BlockWeightSpec::RationalOdeSubstitution {
+                    seed: Box::new(sizes(&[1])),
+                    a: "1".into(),
+                    b: "0".into(),
+                    lambda: "0".into(),
+                    d: "1".into(),
+                },
+            },
+        ),
+        (
+            "z",
+            "1/(1-z)-1",
+            ExponentialFamily {
+                unmarked: sizes(&[1]),
+                marked: BlockWeightSpec::RationalOdeSubstitution {
+                    seed: Box::new(sizes(&[1])),
+                    a: "1".into(),
+                    b: "0".into(),
+                    lambda: "1".into(),
+                    d: "1".into(),
+                },
+            },
+        ),
+    ] {
+        let f = ExponentialFamily {
+            unmarked: expression(a),
+            marked: expression(b),
+        };
+        assert_eq!(f.rows(14).unwrap(), structured.rows(14).unwrap(), "{b}");
+        assert_eq!(
+            f.selected_rows(&[12, 0, 3, 14, 12]).unwrap(),
+            [12, 0, 3, 14, 12].map(|n| structured.row(n).unwrap()),
+            "{b}"
+        );
+        if b.contains("log") || b.contains("1/(1-z)") {
+            let routes = exponential_row_routes(&f).unwrap();
+            assert_eq!(
+                routes[0].evidence,
+                ExponentialEvidenceLevel::PaperProof,
+                "{b}"
+            );
+        } else if !b.contains("z^2/2") || a == "z" {
+            assert!(!exponential_row_routes(&f).unwrap().is_empty(), "{b}");
+        }
+    }
+    for b in ["z^2*(1+z^4)", "z^2+z^6"] {
+        let f = ExponentialFamily {
+            unmarked: expression("z"),
+            marked: expression(b),
+        };
+        let report = check_exponential_rows(&request(
+            f,
+            (0..=8).collect(),
+            ExponentialRowCheck::FirstFailure,
+        ))
+        .unwrap();
+        assert_eq!(report.first_failure.as_ref().unwrap().index, 6);
+        report.first_failure.unwrap().verify().unwrap();
+        assert!(report.routes.is_empty());
+    }
+    assert_eq!(
+        ExponentialFamily {
+            unmarked: expression("z"),
+            marked: expression("z^2*(1+z)^3")
+        }
+        .row(8)
+        .unwrap(),
+        ExponentialFamily {
+            unmarked: sizes(&[1]),
+            marked: BlockWeightSpec::Finite {
+                weights: [0, 2, 18, 72, 120].map(|x| x.to_string()).to_vec()
+            }
+        }
+        .row(8)
+        .unwrap()
+    );
+}
+#[test]
+fn expressions_check_full_identities_and_sign_hypotheses() {
+    for b in [
+        "exp(z)-1",
+        "exp(z)-1-z",
+        "compose(exp(x)-1-x,z^2)",
+        "compose(x*(1+x),z^2)",
+        "exp(z^2)-1-z^2",
+        "exp(z^2+z^3)-1",
+    ] {
+        let f = ExponentialFamily {
+            unmarked: expression("z"),
+            marked: expression(b),
+        };
+        assert!(!exponential_row_routes(&f).unwrap().is_empty(), "{b}");
+    }
+    // A late perturbation cannot pass a parameter fit or a short prefix check.
+    for b in [
+        "exp(z)-1+z^20",
+        "compose(exp(x)-1+x^20,z^2)",
+        "log(1/(1-z))+z^20",
+        "exp(z^2)-1+z",
+        "exp(z^2)-1-z^3",
+    ] {
+        assert!(
+            exponential_row_routes(&ExponentialFamily {
+                unmarked: expression("z"),
+                marked: expression(b)
+            })
+            .unwrap()
+            .is_empty(),
+            "{b}"
+        );
+    }
+    let f = ExponentialFamily {
+        unmarked: expression("z-z^2/3"),
+        marked: expression("exp(z)-1"),
+    };
+    let report =
+        check_exponential_rows(&request(f, vec![0, 2, 4], ExponentialRowCheck::RealRooted))
+            .unwrap();
+    assert!(report.routes.is_empty());
+    assert_eq!(report.coefficient_signs[0].status, "negative");
+    assert_eq!(
+        report.coefficient_signs[0]
+            .first_negative_coefficient
+            .as_deref(),
+        Some("-1/3")
+    );
+    assert_eq!(report.coefficient_signs[0].first_negative_degree, Some(2));
+    let f = ExponentialFamily {
+        unmarked: expression("z"),
+        marked: expression("exp(z)-1-z^20"),
+    };
+    let report = check_exponential_rows(&request(f, vec![3], ExponentialRowCheck::None)).unwrap();
+    assert_eq!(report.coefficient_signs[1].status, "unknown");
+    assert!(report.routes.is_empty());
+    for b in ["1+z", "exp(1)", "compose(z,1+z)", "log(z)", "1/z"] {
+        assert!(expression(b).block_weights(0).is_err(), "{b}");
+    }
+    assert_eq!(
+        expression("coeffs:exponential:[0,1,2]")
+            .block_weights(3)
+            .unwrap(),
+        vec![q(0), q(1), q(2), q(0)]
+    );
+    assert_eq!(
+        expression("coeffs:[0,1,2]").block_weights(3).unwrap(),
+        vec![q(0), q(1), q(4), q(0)]
+    );
+}
+
+#[test]
+fn expression_preserves_supplied_polynomial_substitution_witness() {
+    let family = ExponentialFamily {
+        unmarked: expression("z"),
+        marked: expression("compose(x*(1+x)^2,z^2+z^3+z^4)"),
+    };
+    let routes = exponential_row_routes(&family).unwrap();
+    assert_eq!(routes[0].route, "polynomial_substitution_paper");
+    assert_eq!(routes[0].evidence, ExponentialEvidenceLevel::PaperProof);
+    assert_eq!(routes[0].premises[0].route, "nonnegative_quartic_seed");
+    assert_eq!(
+        family.rows(16).unwrap(),
+        ExponentialFamily {
+            unmarked: expression("z"),
+            marked: expression("(z^2+z^3+z^4)*(1+z^2+z^3+z^4)^2"),
+        }
+        .rows(16)
+        .unwrap()
+    );
+}

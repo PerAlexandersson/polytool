@@ -1,0 +1,4 @@
+n=1: 1, 1 degree=1 real_rooted=yes
+n=2: 6, 6, 1 degree=2 real_rooted=yes
+1 -> 2: forward=no, reverse=not applicable
+First failure n=2: does not interlace the previous row in either orientation (degree 2, 2 distinct real roots, square-free degree 2)

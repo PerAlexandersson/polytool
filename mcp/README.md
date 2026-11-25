@@ -380,8 +380,18 @@ It returns exact rows/checks and separately labelled symbolic routes.
 See [the guide](../doc/cli-exp-rows.md) for all schemas, bounds and finite-rank
 certificates. `tool_help` exposes that guide as well. Inputs are bounded to
 512 rows, rank 1000, generation degree 256 or checked degree 64, 65536 total
-coefficients and 256-bit input rationals; composed ranks are capped at 128.
+coefficients and 256-bit structured-weight rationals; composed ranks are capped at 128.
 Finite success is evidence only; k=8 obstruction claims remain under review.
+
+Series expressions are also accepted by `generate_exponential_rows`, for example
+`{"kind":"series_expression","expression":"exp(z)-1-z-z^2/2"}` for either
+block specification. The shared [expression grammar](../doc/cli-exp-rows.md#exact-series-expressions)
+includes exact rational arithmetic, exp/log/inverse, composition, derivatives,
+finite polynomial truncation, and ordinary/exponential coefficient lists.
+Expression inputs are bounded to rank 128, 2048 bytes, 128 nodes, depth 16,
+exponents/list degrees 64, derivative lookahead degree 144, and 4096 bits per
+literal/intermediate numerator or denominator. Sign diagnostics distinguish
+structural nonnegativity from finite negative witnesses or unknown signs.
 
 ## Tools
 

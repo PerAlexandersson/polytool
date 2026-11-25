@@ -1,0 +1,4 @@
+n=6: 1, 750, 180, 120 degree=3 real_rooted=no
+unmarked coefficient signs: nonnegative through rank 6, no negative coefficient
+marked coefficient signs: nonnegative through rank 6, no negative coefficient
+First failure n=6: not real-rooted (degree 3, 1 distinct real root, square-free degree 3)

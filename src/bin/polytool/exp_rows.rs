@@ -30,7 +30,10 @@ fn spec(value: &str) -> Result<BlockWeightSpec, String> {
             weights: s.split(',').map(str::to_string).collect(),
         });
     }
-    Err("expected none, sizes:1,2, weights:1,1/2, tail:2, or a JSON block specification".into())
+    polytool::power_series::SeriesExpression::parse(value).map_err(|e| e.to_string())?;
+    Ok(BlockWeightSpec::SeriesExpression {
+        expression: value.into(),
+    })
 }
 fn rows(value: &str) -> Result<Vec<usize>, String> {
     let parse = |s: &str| {
@@ -175,12 +178,40 @@ pub(crate) fn cmd_exp_rows(args: &[String]) {
                 route.statement
             );
         }
-        if let Some(f) = &report.first_failure {
+        for signs in &report.coefficient_signs {
+            let witness = match (
+                signs.first_negative_degree,
+                &signs.first_negative_coefficient,
+            ) {
+                (Some(degree), Some(coefficient)) => {
+                    format!("first negative coefficient at degree {degree}: {coefficient}")
+                }
+                _ => "no negative coefficient".into(),
+            };
             println!(
-                "First failure n={}: {}, degree={}, distinct_real_roots={}, squarefree_degree={}",
+                "{} coefficient signs: {} through rank {}, {witness}",
+                signs.series, signs.status, signs.checked_through
+            );
+        }
+        if let Some(f) = &report.first_failure {
+            let property = match f.property.as_str() {
+                "real_rooted" => "not real-rooted",
+                "interlacing_either_orientation" => {
+                    "does not interlace the previous row in either orientation"
+                }
+                other => other,
+            };
+            let degree = f
+                .degree
+                .map_or_else(|| "zero polynomial".into(), |d| format!("degree {d}"));
+            let roots = if f.distinct_real_roots == 1 {
+                "root"
+            } else {
+                "roots"
+            };
+            println!(
+                "First failure n={}: {property} ({degree}, {} distinct real {roots}, square-free degree {})",
                 f.index,
-                f.property,
-                degree_label(f.degree),
                 f.distinct_real_roots,
                 f.squarefree_degree
             );

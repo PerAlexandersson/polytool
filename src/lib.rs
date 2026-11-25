@@ -105,6 +105,7 @@
 //!   (`image_recurrence_of_operator`, built on the `ore-algebra` crate), and
 //!   reduced exact rational row generating functions with Riordan decomposition
 //!   ([`recurrence::generating_function`])
+//! - [`power_series`] — exact truncated rational series and formal expressions
 //! - [`exponential_rows`] — labelled-block exponential families and exact symbolic routes
 //! - [`renewal`] — Exact recognition of renewal-type recurrences
 //!   `P_n = sum_j r_j t^j P_(n-1-ell*j)` with interlacing consequences,
@@ -208,6 +209,8 @@ pub use linalg::{
 /// Exact labelled-block exponential families, streaming checks and proof routes.
 pub mod exponential_rows;
 pub mod parse;
+/// Exact truncated rational series and bounded formal expression language.
+pub mod power_series;
 pub mod real_rooted_enumeration;
 pub mod real_rootedness;
 pub mod recurrence;

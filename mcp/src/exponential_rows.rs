@@ -8,17 +8,22 @@ use serde::Deserialize;
 #[derive(Clone, Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExponentialRowsToolRequest {
-    /// Shared ExponentialRowsRequest: {family:{unmarked,marked},rows:[n,...],
+    /// Request: {family:{unmarked,marked},rows:[n,...],
     /// check?:none|real_rooted|interlacing|first_failure,summary?:bool,finite_rank?:[]}.
     /// Block specs: `{kind:sizes,sizes:[1,2]}`, `{kind:finite,weights:["1","1/2"]}`,
     /// `{kind:tail,minimum:2}`, `{kind:exponential,scale:"1",rate:"1",minimum:2}`,
     /// `{kind:polynomial_substitution,seed:SPEC,coefficients:["2","3","1"]}`,
     /// or `{kind:ode_substitution,seed:SPEC,a:"1",b:"0",lambda:"1"}`.
-    /// Bounds: JSON <=65536 bytes; 1..512 rows, ranks <=1000; generated degree
-    /// <=256, checked degree <=64; total output coefficients <=65536; rational
-    /// text <=80 bytes and numerator/denominator <=256 bits. Composition depth
+    /// Expressions: `{kind:series_expression,expression:"exp(z)-1"}`;
+    /// +,-,*,/,^,exp,log,inv,compose,trunc,derivative,coeffs:[...].
+    /// Expressions: rank <=128, bytes <=2048, nodes <=128,
+    /// depth <=16, exponents/list degrees <=64, literal and intermediate
+    /// numerator/denominator <=4096 bits; derivative lookahead <=144.
+    /// Bounds: JSON <=65536 bytes; 1..512 rows, rank <=1000; generated degree
+    /// <=256, checked degree <=64; output coefficients <=65536. Structured-weight
+    /// rationals: text <=80 bytes, numerator/denominator <=256 bits. Composition depth
     /// <=4 and composed ranks <=128; polynomial composition degree <=64.
-    /// At most 16 finite-rank references.
+    /// <=16 finite-rank references.
     pub request: serde_json::Value,
 }
 fn coefficient(s: &str) -> Result<(), ErrorData> {
@@ -37,6 +42,22 @@ fn spec(s: &BlockWeightSpec, depth: usize, max_n: usize) -> Result<(), ErrorData
         return Err(invalid_params("composition depth exceeds 4"));
     }
     match s {
+        BlockWeightSpec::SeriesExpression { expression } => {
+            if max_n > 128 {
+                return Err(invalid_params("expression rank exceeds 128"));
+            }
+            let limits = polytool::power_series::SeriesExpressionLimits {
+                bytes: 2048,
+                nodes: 128,
+                depth: 16,
+                exponent: 64,
+                degree: 144,
+                coefficient_bits: 4096,
+            };
+            polytool::power_series::SeriesExpression::parse_with_limits(expression, &limits)
+                .and_then(|e| e.evaluate_with_limits(max_n, &limits))
+                .map_err(|e| invalid_params(e.to_string()))?;
+        }
         BlockWeightSpec::Finite { weights } => {
             if weights.len() > 1000 {
                 return Err(invalid_params("weight count exceeds 1000"));
@@ -208,5 +229,50 @@ mod rational_ode_tests {
         assert!(server
             .generate_exponential_rows(Parameters(ExponentialRowsToolRequest { request }))
             .is_err());
+    }
+}
+
+#[cfg(test)]
+mod expression_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn exact_expressions_and_resource_bounds() {
+        let request = json!({"family":{"unmarked":{"kind":"series_expression","expression":"z"},"marked":{"kind":"series_expression","expression":"log(1/(1-z))"}},"rows":[6,8],"check":"real_rooted"});
+        let report = run(ExponentialRowsToolRequest {
+            request: request.clone(),
+        })
+        .unwrap();
+        assert_eq!(report["routes"][0]["evidence"], "paper_proof");
+        assert!(report["first_failure"].is_null());
+        for b in [
+            "z^65",
+            "exp(1)",
+            "1+z",
+            "compose(z,1+z)",
+            "exp(z",
+            &"-".repeat(129),
+            &"1+".repeat(1100),
+        ] {
+            let mut bad = request.clone();
+            bad["family"]["marked"]["expression"] = json!(b);
+            assert!(
+                run(ExponentialRowsToolRequest { request: bad }).is_err(),
+                "{b}"
+            );
+        }
+        let mut bad = request.clone();
+        bad["rows"] = json!([129]);
+        assert!(run(ExponentialRowsToolRequest { request: bad }).is_err());
+        let mut bad = request.clone();
+        bad["family"]["marked"]["expression"] = json!(format!("({})^64*z", "9".repeat(100)));
+        assert!(run(ExponentialRowsToolRequest { request: bad }).is_err());
+        let mut counterexample = request;
+        counterexample["family"]["marked"]["expression"] = json!("z^2*(1+z^4)");
+        let report = run(ExponentialRowsToolRequest {
+            request: counterexample,
+        })
+        .unwrap();
+        assert_eq!(report["first_failure"]["index"], 6);
     }
 }

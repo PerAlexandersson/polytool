@@ -20,6 +20,10 @@ the nonnegative proof-route hypotheses.
 
 | Specification | Formal series |
 | --- | --- |
+| `exp(z)-1-z-z^2/2` | exact expression, here a threshold-three tail |
+| `coeffs:[0,1,1/2]` | finite ordinary series `z+z^2/2` |
+| `coeffs:exponential:[0,1,1]` | finite exponential weights, also `z+z^2/2` |
+| `{"kind":"series_expression","expression":"log(1/(1-z))"}` | `sum_{r>=1} z^r/r` |
 | `none` or `{"kind":"sizes","sizes":[]}` | zero |
 | `sizes:1,2` | `z+z^2/2!` |
 | `weights:1,1/2` | `z+z^2/4` |
@@ -78,6 +82,76 @@ row, square-free part, degree and distinct PRS real-root count. That exact
 failure certificate replays with `ExponentialFailureCertificate::verify`;
 it is a root-engine replay record, not a standalone signed remainder chain.
 
+## Exact series expressions
+
+Both weight flags accept expressions directly. JSON uses
+`{"kind":"series_expression","expression":"exp(z)-1"}`. Expressions
+always use ordinary powers; `weights:` retains its size-one exponential
+normalization. Inline coefficient lists explicitly include the constant slot.
+They describe finite polynomials, with omitted higher coefficients zero.
+`coeffs:ordinary:[...]` is an alias for `coeffs:[...]`;
+`coeffs:exponential:[w0,w1,...]` means `sum w_r*z^r/r!`.
+Rational list entries may also be quoted strings. Request files use the same
+JSON specification and grammar as the flags.
+
+```sh
+polytool exp-rows --marked 'exp(z)-1' --rows 0..=20 --check interlacing
+polytool exp-rows --unmarked 'z+z^2/2' --marked 'exp(z)-1-z-z^2/2' --rows 0..=14 --json
+polytool exp-rows --unmarked z --marked 'z^2*(1+z)^3' --rows 8,12 --json
+polytool exp-rows --unmarked z --marked 'compose(exp(x)-1-x,z^2)' --rows 0..=12 --json
+polytool exp-rows --unmarked z --marked 'log(1/(1-z))' --rows 0..=12 --check real-rooted
+polytool exp-rows --unmarked z --marked '1/(1-z)-1' --rows 0..=12 --json
+polytool exp-rows --unmarked z --marked 'z^2*(1+z^4)' --rows 0..=8 --check first-failure
+```
+
+The last command stops at rank 6 and prints this final line.
+
+```text
+First failure n=6: not real-rooted (degree 3, 1 distinct real root, square-free degree 3)
+```
+
+For an interlacing failure, the message identifies the comparison with the
+previous row. The root counts in parentheses describe the row at the reported rank.
+
+Grammar (whitespace is ignored between tokens):
+
+```text
+sum       := product (("+" | "-") product)*
+product   := unary (("*" | "/") unary)*
+unary     := ("+" | "-") unary | atom ("^" nonnegative_integer)?
+atom      := nonnegative_integer | "z" | "x" | "(" sum ")"
+           | "exp(" sum ")" | "log(" sum ")" | "inv(" sum ")"
+           | "compose(" sum "," sum ")"
+           | "trunc(" sum "," nonnegative_integer ")"
+           | "derivative(" sum ")" | coefficient_list
+```
+
+`x` and `z` denote the same formal variable; in `compose(outer,inner)`
+the first argument is evaluated in its own formal variable and then
+substituted. Multiplication is explicit. Powers accept a single nonnegative
+integer exponent (`-z^2` means `-(z^2)`); `z^1/2` means `z/2`.
+Use parentheses for other grouping. `exp(f)` requires `f(0)=0`,
+`log(f)` requires `f(0)=1`, every divisor and `inv(f)` require nonzero
+constant term, and composition requires zero inner constant term.
+`exp(1)`, `log(2+z)`, `1/z`, and `compose(z,1+z)` are errors.
+These restrictions keep every computed coefficient rational and every
+operation formal at zero. Final block series must have constant term zero.
+Syntax errors include byte offsets; domain errors state the failed condition.
+
+`trunc(f,k)` denotes the **finite polynomial** consisting of degrees zero
+through k inclusive, so subsequent operations know all discarded coefficients
+are zero. `derivative(f)` computes enough extra terms for the requested
+output, including when nested. Ordinary expression evaluation requests only
+coefficients through the largest selected rank, plus derivative lookahead;
+no infinite series or analytic approximation is constructed.
+
+Default library/CLI expression limits are 8192 bytes, 512 tree nodes,
+depth 64, exponent/truncation degree and list degree at most 1024,
+evaluation degree at most 4096 (including derivative lookahead), and 65536
+bits per numerator/denominator in literals and intermediate expression results.
+The reusable evaluator accepts custom `SeriesExpressionLimits`; MCP applies
+tighter bounds below. These bounds reject excessive inputs with errors.
+
 ## Symbolic routes and evidence levels
 
 The exponential-series route registry is separate from the recurrence-record
@@ -87,7 +161,33 @@ series identity. Structured ODE composition itself supplies the exact identity;
 recognized exponential tails with threshold one or two supply equivalent ODEs.
 Finite coefficient lists are also checked for exact quadratic substitutions of
 singleton and nonnegative quartic seeds, by full polynomial multiplication.
-Other unstructured compositions remain open.
+Expression recognition normalizes bounded exponential polynomials and verifies
+full rational or exponential-polynomial differential identities. A finite
+prefix may propose ODE parameters, but a full symbolic identity is required
+to accept them. `compose(Phi,seed)` supports the existing ODE and polynomial
+classes; explicit exponential inner subtrees also recognize expressions such
+as `exp(z^2)-1-z^2` by exact substitution. Unmatched free variables reject
+that identity. Recognized finite expressions enter the same seed and divisibility
+routes as finite weight lists. Recognition is conservative: symbolic
+polynomials have degree at most 128, exponential normal forms at most 16 rates,
+and symbolic coefficients at most 4096 bits. Exceeding recognition bounds
+leaves generation available and supplies no proof route.
+
+Reports add optional `coefficient_signs` entries for expression inputs and
+actual negative prefix witnesses. Status `nonnegative` means a structural
+all-coefficient sign check succeeded; `negative` includes the first negative
+ordinary coefficient and its degree in the inspected prefix; `unknown` means
+no global sign proof was found, even if the prefix has no negative entries.
+`checked_through` is the inclusive requested maximum rank. Negative coefficients
+and unknown signs never justify a nonnegative theorem route. These diagnostics
+do not change generation or finite-check exit status.
+
+For example, `--unmarked 'z-z^3' --marked z --rows 3` prints these sign lines.
+
+```text
+unmarked coefficient signs: negative through rank 3, first negative coefficient at degree 3: -1
+marked coefficient signs: nonnegative through rank 3, no negative coefficient
+```
 
 - `theorem_backed`: nonnegative singleton/binomial seeds; `A=z` with nonnegative
   quadratic, cubic or quartic marked series; threshold-two big blocks; and
@@ -190,6 +290,11 @@ result fields. `tool_help {"tool":"generate_exponential_rows"}` returns
 this guide. Bounds are enforced before row generation/root checking:
 JSON <=65536 bytes, 1..512 rows, ranks <=1000, generated degree <=256,
 checked degree <=64, total selected coefficient bound <=65536, weight lists
-and size sets <=1000, rational text <=80 bytes and numerator/denominator
+and size sets <=1000, structured-spec rational text <=80 bytes and numerator/denominator
 <=256 bits. Composition depth <=4 and rank <=128; polynomial composition degree <=64. At most 16 reference
-certificates, each of degree <=64. Use CLI/library for larger computations.
+certificates, each of degree <=64. Expression specs additionally require rank
+<=128, input <=2048 bytes, tree <=128 nodes, depth <=16, exponent/truncation
+and list degree <=64, derivative lookahead degree <=144, and numerator/denominator
+<=4096 bits in literals and intermediate expression results (replacing the
+structured-weight rational bounds). Use CLI/library
+for larger computations.
