@@ -68,7 +68,9 @@ jobs:
         run: |
           cargo package --list | grep -x 'data/oeis-catalog.jsonl' > /dev/null
           cargo package --manifest-path crates/exact-real-roots/Cargo.toml
-          cargo package --manifest-path crates/ore-algebra/Cargo.toml
+          # ore-algebra depends on exact-algebra, which is not published yet (publish = false),
+          # so only its package contents can be checked here.
+          cargo package --list --manifest-path crates/ore-algebra/Cargo.toml > /dev/null
 
       - name: Check and test the exact-algebra crate
         run: |
